@@ -56,7 +56,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_SESSION['user_id'])) {
     $guests = $_POST['guests'] ?? '';
 
     if ($check_in && $check_out && $guests) {
-        $booking_result = createBooking($_SESSION['user_id'], $room_id, $check_in, $check_out, $guests);
+        // Calculate total price based on number of days
+        $check_in_date = new DateTime($check_in);
+        $check_out_date = new DateTime($check_out);
+        $days = $check_out_date->diff($check_in_date)->days;
+        $total_price = $room['price'] * $days;
+
+        // Create booking with room_id first, then user_id
+        $booking_result = createBooking($room_id, $_SESSION['user_id'], $check_in, $check_out, $total_price);
         if ($booking_result) {
             header('Location: bookings.php');
             exit;

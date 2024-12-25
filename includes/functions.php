@@ -11,52 +11,57 @@ function getAllRooms() {
 
 function getRoomById($id) {
     global $conn;
-    $id = $conn->real_escape_string($id);
-    $sql = "SELECT * FROM rooms WHERE id = '$id'";
-    $result = $conn->query($sql);
-    return $result->fetch_assoc();
+    $stmt = $conn->prepare("SELECT * FROM rooms WHERE id = ?");
+    $stmt->bind_param("i", $id);
+    $stmt->execute();
+    return $stmt->get_result()->fetch_assoc();
 }
 
 // Booking functions
 function createBooking($roomId, $userId, $checkIn, $checkOut, $totalPrice) {
     global $conn;
-    $sql = "INSERT INTO bookings (room_id, user_id, check_in, check_out, total_price) 
-            VALUES (?, ?, ?, ?, ?)";
+    $status = 'pending'; // Default status
+    $sql = "INSERT INTO bookings (room_id, user_id, check_in, check_out, total_price, status) 
+            VALUES (?, ?, ?, ?, ?, ?)";
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("iissd", $roomId, $userId, $checkIn, $checkOut, $totalPrice);
+    $stmt->bind_param("iissds", $roomId, $userId, $checkIn, $checkOut, $totalPrice, $status);
     return $stmt->execute();
 }
 
 function getBookingsByUser($userId) {
     global $conn;
-    $userId = $conn->real_escape_string($userId);
-    $sql = "SELECT b.*, r.name as room_name 
+    $sql = "SELECT b.*, r.name as room_name, r.image as room_image 
             FROM bookings b 
             JOIN rooms r ON b.room_id = r.id 
-            WHERE b.user_id = '$userId'";
-    $result = $conn->query($sql);
-    return $result->fetch_all(MYSQLI_ASSOC);
+            WHERE b.user_id = ? 
+            ORDER BY b.created_at DESC";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("i", $userId);
+    $stmt->execute();
+    return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 }
 
 // Review functions
-function createReview($bookingId, $rating, $comment) {
+function createReview($bookingId, $userId, $roomId, $rating, $comment) {
     global $conn;
-    $sql = "INSERT INTO reviews (booking_id, rating, comment) VALUES (?, ?, ?)";
+    $sql = "INSERT INTO reviews (booking_id, user_id, room_id, rating, comment) 
+            VALUES (?, ?, ?, ?, ?)";
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("iis", $bookingId, $rating, $comment);
+    $stmt->bind_param("iiiis", $bookingId, $userId, $roomId, $rating, $comment);
     return $stmt->execute();
 }
 
 function getReviewsByRoom($roomId) {
     global $conn;
-    $roomId = $conn->real_escape_string($roomId);
     $sql = "SELECT r.*, u.name as user_name 
             FROM reviews r 
-            JOIN bookings b ON r.booking_id = b.id 
-            JOIN users u ON b.user_id = u.id 
-            WHERE b.room_id = '$roomId'";
-    $result = $conn->query($sql);
-    return $result->fetch_all(MYSQLI_ASSOC);
+            JOIN users u ON r.user_id = u.id 
+            WHERE r.room_id = ? 
+            ORDER BY r.created_at DESC";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("i", $roomId);
+    $stmt->execute();
+    return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 }
 
 // User functions
@@ -71,10 +76,11 @@ function createUser($name, $email, $password) {
 
 function getUserByEmail($email) {
     global $conn;
-    $email = $conn->real_escape_string($email);
-    $sql = "SELECT * FROM users WHERE email = '$email'";
-    $result = $conn->query($sql);
-    return $result->fetch_assoc();
+    $sql = "SELECT * FROM users WHERE email = ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("s", $email);
+    $stmt->execute();
+    return $stmt->get_result()->fetch_assoc();
 }
 
 function validateUser($email, $password) {
