@@ -3,36 +3,45 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ config('app.name', 'Hotelly') }}</title>
-    
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Custom CSS -->
-    <link rel="stylesheet" href="{{ asset('css/app.css') }}">
+    <title>{{ config('app.name', 'Hotelly') }} - @yield('title', 'Luxury Hotel')</title>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Montserrat:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ asset('css/style.css') }}">
+    @stack('styles')
 </head>
-<body class="bg-gray-100">
+<body>
     <!-- Navigation -->
-    <nav class="bg-white shadow-lg">
-        <div class="max-w-7xl mx-auto px-4">
-            <div class="flex justify-between h-16">
-                <div class="flex">
-                    <div class="flex-shrink-0 flex items-center">
-                        <a href="/" class="text-2xl font-serif">HOTELLY</a>
-                    </div>
-                    <div class="hidden md:ml-6 md:flex md:space-x-8">
-                        <a href="/" class="inline-flex items-center px-1 pt-1 text-gray-900">Home</a>
-                        <a href="/rooms" class="inline-flex items-center px-1 pt-1 text-gray-500 hover:text-gray-900">Rooms</a>
-                        <a href="/dining" class="inline-flex items-center px-1 pt-1 text-gray-500 hover:text-gray-900">Dining</a>
-                        <a href="/events" class="inline-flex items-center px-1 pt-1 text-gray-500 hover:text-gray-900">Events</a>
-                        <a href="/about" class="inline-flex items-center px-1 pt-1 text-gray-500 hover:text-gray-900">About</a>
-                    </div>
-                </div>
-                <div class="flex items-center">
-                    <a href="/login" class="text-gray-500 hover:text-gray-900 px-3 py-2">Sign In</a>
-                    <a href="/book-now" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">Book Now</a>
-                </div>
+    <nav class="nav-container">
+        <a href="{{ url('/') }}" class="logo">HOTELLY</a>
+        <div class="nav-right">
+            <div class="nav-links">
+                <a href="{{ url('/') }}" class="nav-link {{ request()->is('/') ? 'active' : '' }}">Home</a>
+                <a href="{{ url('/rooms') }}" class="nav-link {{ request()->is('rooms*') ? 'active' : '' }}">Rooms</a>
+                <a href="{{ url('/dining') }}" class="nav-link {{ request()->is('dining') ? 'active' : '' }}">Dining</a>
+                <a href="{{ url('/events') }}" class="nav-link {{ request()->is('events') ? 'active' : '' }}">Events</a>
+                <a href="{{ url('/about') }}" class="nav-link {{ request()->is('about') ? 'active' : '' }}">About</a>
             </div>
+            @auth
+                <div class="user-menu">
+                    <span class="user-name">{{ Auth::user()->name }}</span>
+                    <div class="user-dropdown">
+                        <a href="{{ url('/dashboard') }}">Dashboard</a>
+                        <a href="{{ url('/bookings') }}">My Bookings</a>
+                        @if(Auth::user()->is_admin)
+                            <a href="{{ url('/admin') }}">Admin Panel</a>
+                        @endif
+                        <form method="POST" action="{{ route('logout') }}">
+                            @csrf
+                            <button type="submit">Logout</button>
+                        </form>
+                    </div>
+                </div>
+            @else
+                <div class="auth-buttons">
+                    <a href="{{ route('login') }}" class="nav-link">Login</a>
+                    <a href="{{ route('register') }}" class="btn btn-solid">Register</a>
+                </div>
+            @endauth
         </div>
     </nav>
 
@@ -42,35 +51,63 @@
     </main>
 
     <!-- Footer -->
-    <footer class="bg-gray-800 text-white mt-12">
-        <div class="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:py-16 lg:px-8">
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-8">
-                <div>
-                    <h3 class="text-sm font-semibold uppercase tracking-wider">About</h3>
-                    <ul class="mt-4 space-y-4">
-                        <li><a href="#" class="text-gray-300 hover:text-white">Our Story</a></li>
-                        <li><a href="#" class="text-gray-300 hover:text-white">Press</a></li>
-                        <li><a href="#" class="text-gray-300 hover:text-white">Careers</a></li>
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h3 class="serif">HOTELLY</h3>
+                    <p>Experience luxury and comfort in the heart of Copenhagen. Our hotel offers the perfect blend of modern amenities and timeless elegance.</p>
+                </div>
+                
+                <div class="footer-section">
+                    <h4>Quick Links</h4>
+                    <ul>
+                        <li><a href="{{ url('/rooms') }}">Rooms & Suites</a></li>
+                        <li><a href="{{ url('/dining') }}">Dining</a></li>
+                        <li><a href="{{ url('/spa') }}">Spa & Wellness</a></li>
+                        <li><a href="{{ url('/events') }}">Events</a></li>
                     </ul>
                 </div>
-                <div>
-                    <h3 class="text-sm font-semibold uppercase tracking-wider">Support</h3>
-                    <ul class="mt-4 space-y-4">
-                        <li><a href="#" class="text-gray-300 hover:text-white">Contact</a></li>
-                        <li><a href="#" class="text-gray-300 hover:text-white">FAQ</a></li>
-                        <li><a href="#" class="text-gray-300 hover:text-white">Terms</a></li>
+                
+                <div class="footer-section">
+                    <h4>Contact</h4>
+                    <ul>
+                        <li>123 Hotel Street</li>
+                        <li>Copenhagen, Denmark</li>
+                        <li>Phone: +45 1234 5678</li>
+                        <li>Email: info@hotelly.com</li>
                     </ul>
+                </div>
+                
+                <div class="footer-section">
+                    <h4>Newsletter</h4>
+                    <p>Subscribe to our newsletter for special offers and updates.</p>
+                    <form class="newsletter-form" action="{{ route('newsletter.subscribe') }}" method="POST">
+                        @csrf
+                        <input type="email" name="email" placeholder="Your email address" required>
+                        <button type="submit" class="btn btn-solid">Subscribe</button>
+                    </form>
                 </div>
             </div>
-            <div class="mt-8 border-t border-gray-700 pt-8">
-                <p class="text-gray-400 text-sm">
-                    © 2024 Hotelly. All rights reserved.
-                </p>
+            
+            <div class="footer-bottom">
+                <p>&copy; {{ date('Y') }} Hotelly. All rights reserved.</p>
+                <div class="footer-links">
+                    <a href="{{ url('/privacy') }}">Privacy Policy</a>
+                    <a href="{{ url('/terms') }}">Terms of Service</a>
+                </div>
             </div>
         </div>
     </footer>
 
     <!-- Scripts -->
-    <script src="{{ asset('js/app.js') }}"></script>
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+    <script>
+        AOS.init({
+            duration: 800,
+            once: true
+        });
+    </script>
+    @stack('scripts')
 </body>
 </html>

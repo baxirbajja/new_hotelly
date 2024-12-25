@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rooms - Hotelly</title>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Montserrat:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/rooms.css">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="nav-container">
+        <a href="index.html" class="logo">HOTELLY</a>
+        <div class="nav-right">
+            <div class="nav-links">
+                <a href="index.html" class="nav-link">Home</a>
+                <a href="rooms.html" class="nav-link active">Rooms</a>
+                <a href="#" class="nav-link">Dining</a>
+                <a href="#" class="nav-link">Events</a>
+                <a href="#" class="nav-link">About</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Page Header -->
+    <header class="page-header">
+        <div class="header-content">
+            <h1 class="serif" data-aos="fade-up">Our Rooms</h1>
+            <p data-aos="fade-up" data-aos-delay="100">Experience luxury and comfort in our carefully designed rooms</p>
+        </div>
+    </header>
+
+    <!-- Room Filters -->
+    <section class="filters-section">
+        <div class="container">
+            <form class="filters-form" data-aos="fade-up">
+                <div class="filter-group">
+                    <label>Check In</label>
+                    <input type="date" class="filter-input">
+                </div>
+                <div class="filter-group">
+                    <label>Check Out</label>
+                    <input type="date" class="filter-input">
+                </div>
+                <div class="filter-group">
+                    <label>Guests</label>
+                    <select class="filter-input">
+                        <option>1 Guest</option>
+                        <option>2 Guests</option>
+                        <option>3 Guests</option>
+                        <option>4+ Guests</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>Room Type</label>
+                    <select class="filter-input">
+                        <option>All Types</option>
+                        <option>Standard Room</option>
+                        <option>Deluxe Room</option>
+                        <option>Suite</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-solid">Search Rooms</button>
+            </form>
+        </div>
+    </section>
+
+    <!-- Rooms Grid -->
+    <section class="rooms-section">
+        <div class="container">
+            <div class="rooms-grid" data-aos="fade-up">
+                <!-- Room Card -->
+                <div class="room-card">
+                    <div class="room-image">
+                        <img src="img/191528.jpg" alt="Luxury Suite">
+                        <div class="room-overlay">
+                            <a href="#" class="btn btn-outline">Book Now</a>
+                        </div>
+                    </div>
+                    <div class="room-info">
+                        <div class="room-type">Luxury Suite</div>
+                        <h3 class="serif">Ocean View Suite</h3>
+                        <div class="room-features">
+                            <span>2 Beds</span>
+                            <span>•</span>
+                            <span>45m²</span>
+                            <span>•</span>
+                            <span>Ocean View</span>
+                        </div>
+                        <div class="room-bottom">
+                            <p class="room-price">From $299<span>/night</span></p>
+                            <a href="#" class="btn-text">View Details</a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- More room cards... -->
+                <!-- Copy the room-card div above and modify details for more rooms -->
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h3 class="serif">HOTELLY</h3>
+                    <p>Experience luxury and comfort in the heart of Copenhagen. Our hotel offers the perfect blend of modern amenities and timeless elegance.</p>
+                </div>
+                
+                <div class="footer-section">
+                    <h4>Quick Links</h4>
+                    <ul>
+                        <li><a href="#">Rooms & Suites</a></li>
+                        <li><a href="#">Dining</a></li>
+                        <li><a href="#">Spa & Wellness</a></li>
+                        <li><a href="#">Events</a></li>
+                    </ul>
+                </div>
+                
+                <div class="footer-section">
+                    <h4>Contact</h4>
+                    <ul>
+                        <li>123 Hotel Street</li>
+                        <li>Copenhagen, Denmark</li>
+                        <li>Phone: +45 1234 5678</li>
+                        <li>Email: info@hotelly.com</li>
+                    </ul>
+                </div>
+                
+                <div class="footer-section">
+                    <h4>Newsletter</h4>
+                    <p>Subscribe to our newsletter for special offers and updates.</p>
+                    <form class="newsletter-form">
+                        <input type="email" placeholder="Your email address">
+                        <button type="submit" class="btn btn-solid">Subscribe</button>
+                    </form>
+                </div>
+            </div>
+            
+            <div class="footer-bottom">
+                <p>&copy; 2024 Hotelly. All rights reserved.</p>
+                <div class="footer-links">
+                    <a href="#">Privacy Policy</a>
+                    <a href="#">Terms of Service</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- AOS Animation Library -->
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+    <script>
+        AOS.init({
+            duration: 800,
+            once: true
+        });
+    </script>
+</body>
+</html>
