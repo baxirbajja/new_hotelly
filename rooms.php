@@ -115,7 +115,7 @@ if (isset($_SESSION['user_id'])) {
                         <div class="room-image">
                             <img src="<?php echo htmlspecialchars($room['image']); ?>" alt="<?php echo htmlspecialchars($room['name']); ?>">
                             <div class="room-overlay">
-                                <a href="room.php?id=<?php echo $room['id']; ?>" class="btn btn-outline">Book Now</a>
+                                <a href="book.php?room_id=<?php echo $room['id']; ?>" class="btn btn-outline">Book Now</a>
                             </div>
                         </div>
                         <div class="room-info">

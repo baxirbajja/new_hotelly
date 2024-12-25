@@ -390,4 +390,18 @@ function updateReviewStatus($id, $status) {
     return $stmt->execute();
 }
 
+// Get booked dates for a room
+function getBookedDates($roomId) {
+    global $conn;
+    $sql = "SELECT check_in, check_out 
+            FROM bookings 
+            WHERE room_id = ? 
+            AND status != 'cancelled'
+            AND check_out >= CURDATE()";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("i", $roomId);
+    $stmt->execute();
+    return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+}
+
 ?>
