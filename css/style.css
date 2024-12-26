@@ -220,6 +220,19 @@ main {
     color: rgba(255, 255, 255, 0.8);
 }
 
+.admin-link {
+    background-color: var(--primary-color);
+    color: var(--secondary-color) !important;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    transition: all 0.3s ease;
+}
+
+.admin-link:hover {
+    background-color: var(--secondary-color);
+    color: var(--primary-color) !important;
+}
+
 @media (max-width: 768px) {
     .nav-links {
         display: none;
@@ -944,4 +957,24 @@ body {
 .form-group input:focus {
     outline: none;
     border-color: var(--primary-color);
+}
+
+/* Alert styles */
+.alert {
+    padding: 1rem;
+    margin: 1rem 0;
+    border-radius: 4px;
+    text-align: center;
+}
+
+.alert-success {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.alert-error {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
 }

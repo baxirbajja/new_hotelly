@@ -22,9 +22,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'size' => $_POST['size'],
                     'view_type' => $_POST['view_type'],
                     'amenities' => json_encode(explode(',', $_POST['amenities'])),
-                    'image' => $_POST['image'],
                     'hotel_id' => $_POST['hotel_id']
                 ];
+
+                if ($_POST['image_type'] === 'url') {
+                    $data['image'] = $_POST['image_url'];
+                } else {
+                    $image = $_FILES['image_upload'];
+                    $data['image'] = uploadImage($image);
+                }
+
                 if (addRoom($data)) {
                     $_SESSION['success'] = "Room added successfully!";
                 } else {
@@ -42,9 +49,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'size' => $_POST['size'],
                     'view_type' => $_POST['view_type'],
                     'amenities' => json_encode(explode(',', $_POST['amenities'])),
-                    'image' => $_POST['image'],
                     'hotel_id' => $_POST['hotel_id']
                 ];
+
+                if ($_POST['image_type'] === 'url') {
+                    $data['image'] = $_POST['image_url'];
+                } else {
+                    $image = $_FILES['image_upload'];
+                    $data['image'] = uploadImage($image);
+                }
+
                 if (updateRoom($_POST['room_id'], $data)) {
                     $_SESSION['success'] = "Room updated successfully!";
                 } else {
@@ -67,6 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // Get all rooms
 $rooms = getAllRooms();
+$hotels = getAllHotels();
 ?>
 
 <!DOCTYPE html>
@@ -247,6 +262,25 @@ $rooms = getAllRooms();
             color: #721c24;
             border: 1px solid #f5c6cb;
         }
+        .image-input-group {
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 4px;
+        }
+        .input-option {
+            margin-bottom: 10px;
+        }
+        .input-option:last-child {
+            margin-bottom: 0;
+        }
+        .image-input {
+            width: 100%;
+            margin-top: 5px;
+        }
+        .input-option label {
+            margin-left: 5px;
+            display: inline-block;
+        }
     </style>
 </head>
 <body>
@@ -330,71 +364,72 @@ $rooms = getAllRooms();
     <div id="addRoomModal" class="modal">
         <div class="modal-content">
             <h2>Add New Room</h2>
-            <form method="POST" class="admin-form">
+            <form method="POST" class="admin-form" enctype="multipart/form-data">
                 <input type="hidden" name="action" value="add">
-                
+
                 <div class="form-group">
-                    <label for="name">Room Name</label>
-                    <input type="text" id="name" name="name" required>
+                    <label>Room Name</label>
+                    <input type="text" name="name" required>
                 </div>
 
                 <div class="form-group">
-                    <label for="type">Room Type</label>
-                    <select id="type" name="type" required>
-                        <option value="Standard">Standard</option>
-                        <option value="Deluxe">Deluxe</option>
-                        <option value="Suite">Suite</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label for="description">Description</label>
-                    <textarea id="description" name="description" required></textarea>
-                </div>
-
-                <div class="form-group">
-                    <label for="price">Price per Night</label>
-                    <input type="number" id="price" name="price" step="0.01" required>
-                </div>
-
-                <div class="form-group">
-                    <label for="capacity">Capacity (Guests)</label>
-                    <input type="number" id="capacity" name="capacity" required>
-                </div>
-
-                <div class="form-group">
-                    <label for="size">Size (m²)</label>
-                    <input type="number" id="size" name="size" required>
-                </div>
-
-                <div class="form-group">
-                    <label for="view_type">View Type</label>
-                    <input type="text" id="view_type" name="view_type" required>
-                </div>
-
-                <div class="form-group">
-                    <label for="hotel">Hotel</label>
-                    <select id="hotel" name="hotel_id" required>
-                        <option value="">Select a Hotel</option>
-                        <?php foreach (getAllHotels() as $hotel): ?>
+                    <label>Hotel</label>
+                    <select name="hotel_id" required>
+                        <?php foreach ($hotels as $hotel): ?>
                             <option value="<?php echo $hotel['id']; ?>"><?php echo htmlspecialchars($hotel['name']); ?> - <?php echo htmlspecialchars($hotel['city']); ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
 
                 <div class="form-group">
-                    <label for="amenities">Amenities (comma-separated)</label>
-                    <input type="text" id="amenities" name="amenities" required>
+                    <label>Description</label>
+                    <textarea name="description" required></textarea>
                 </div>
 
                 <div class="form-group">
-                    <label for="image">Image URL</label>
-                    <input type="url" id="image" name="image" required>
+                    <label>Price per Night</label>
+                    <input type="number" name="price" min="0" step="0.01" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Image</label>
+                    <div class="image-input-group">
+                        <div class="input-option">
+                            <input type="radio" name="image_type" value="url" id="url_option" checked>
+                            <label for="url_option">Image URL</label>
+                            <input type="url" name="image_url" class="image-input" placeholder="Enter image URL">
+                        </div>
+                        <div class="input-option">
+                            <input type="radio" name="image_type" value="upload" id="upload_option">
+                            <label for="upload_option">Upload Image</label>
+                            <input type="file" name="image_upload" class="image-input" accept="image/*">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Capacity</label>
+                    <input type="number" name="capacity" min="1" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Size</label>
+                    <input type="number" name="size" required>
+                </div>
+
+                <div class="form-group">
+                    <label>View Type</label>
+                    <input type="text" name="view_type" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Amenities (comma-separated)</label>
+                    <input type="text" name="amenities" required>
                 </div>
 
                 <div class="form-buttons">
-                    <button type="submit" class="admin-btn admin-btn-primary">Add Room</button>
                     <button type="button" class="admin-btn" onclick="hideAddRoomModal()">Cancel</button>
+                    <button type="submit" class="admin-btn admin-btn-primary">Add Room</button>
                 </div>
             </form>
         </div>
@@ -404,72 +439,73 @@ $rooms = getAllRooms();
     <div id="editRoomModal" class="modal">
         <div class="modal-content">
             <h2>Edit Room</h2>
-            <form method="POST" class="admin-form">
+            <form method="POST" class="admin-form" enctype="multipart/form-data">
                 <input type="hidden" name="action" value="edit">
                 <input type="hidden" name="room_id" id="edit_room_id">
-                
+
                 <div class="form-group">
-                    <label for="edit_name">Room Name</label>
+                    <label>Room Name</label>
                     <input type="text" id="edit_name" name="name" required>
                 </div>
 
                 <div class="form-group">
-                    <label for="edit_type">Room Type</label>
-                    <select id="edit_type" name="type" required>
-                        <option value="Standard">Standard</option>
-                        <option value="Deluxe">Deluxe</option>
-                        <option value="Suite">Suite</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label for="edit_description">Description</label>
-                    <textarea id="edit_description" name="description" required></textarea>
-                </div>
-
-                <div class="form-group">
-                    <label for="edit_price">Price per Night</label>
-                    <input type="number" id="edit_price" name="price" step="0.01" required>
-                </div>
-
-                <div class="form-group">
-                    <label for="edit_capacity">Capacity (Guests)</label>
-                    <input type="number" id="edit_capacity" name="capacity" required>
-                </div>
-
-                <div class="form-group">
-                    <label for="edit_size">Size (m²)</label>
-                    <input type="number" id="edit_size" name="size" required>
-                </div>
-
-                <div class="form-group">
-                    <label for="edit_view_type">View Type</label>
-                    <input type="text" id="edit_view_type" name="view_type" required>
-                </div>
-
-                <div class="form-group">
-                    <label for="edit_hotel">Hotel</label>
+                    <label>Hotel</label>
                     <select id="edit_hotel" name="hotel_id" required>
-                        <option value="">Select a Hotel</option>
-                        <?php foreach (getAllHotels() as $hotel): ?>
+                        <?php foreach ($hotels as $hotel): ?>
                             <option value="<?php echo $hotel['id']; ?>"><?php echo htmlspecialchars($hotel['name']); ?> - <?php echo htmlspecialchars($hotel['city']); ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
 
                 <div class="form-group">
-                    <label for="edit_amenities">Amenities (comma-separated)</label>
-                    <input type="text" id="edit_amenities" name="amenities" required>
+                    <label>Description</label>
+                    <textarea id="edit_description" name="description" required></textarea>
                 </div>
 
                 <div class="form-group">
-                    <label for="edit_image">Image URL</label>
-                    <input type="url" id="edit_image" name="image" required>
+                    <label>Price per Night</label>
+                    <input type="number" id="edit_price" name="price" min="0" step="0.01" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Image</label>
+                    <div class="image-input-group">
+                        <div class="input-option">
+                            <input type="radio" name="image_type" value="url" id="edit_url_option" checked>
+                            <label for="edit_url_option">Image URL</label>
+                            <input type="url" id="edit_image_url" name="image_url" class="image-input" placeholder="Enter image URL">
+                        </div>
+                        <div class="input-option">
+                            <input type="radio" name="image_type" value="upload" id="edit_upload_option">
+                            <label for="edit_upload_option">Upload Image</label>
+                            <input type="file" id="edit_image_upload" name="image_upload" class="image-input" accept="image/*">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Capacity</label>
+                    <input type="number" id="edit_capacity" name="capacity" min="1" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Size</label>
+                    <input type="number" id="edit_size" name="size" required>
+                </div>
+
+                <div class="form-group">
+                    <label>View Type</label>
+                    <input type="text" id="edit_view_type" name="view_type" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Amenities (comma-separated)</label>
+                    <input type="text" id="edit_amenities" name="amenities" required>
                 </div>
 
                 <div class="form-buttons">
-                    <button type="submit" class="admin-btn admin-btn-primary">Update Room</button>
                     <button type="button" class="admin-btn" onclick="hideEditRoomModal()">Cancel</button>
+                    <button type="submit" class="admin-btn admin-btn-primary">Update Room</button>
                 </div>
             </form>
         </div>
@@ -491,15 +527,14 @@ $rooms = getAllRooms();
         function showEditRoomModal(room) {
             document.getElementById('edit_room_id').value = room.id;
             document.getElementById('edit_name').value = room.name;
-            document.getElementById('edit_type').value = room.type;
+            document.getElementById('edit_hotel').value = room.hotel_id;
             document.getElementById('edit_description').value = room.description;
             document.getElementById('edit_price').value = room.price;
             document.getElementById('edit_capacity').value = room.capacity;
             document.getElementById('edit_size').value = room.size;
             document.getElementById('edit_view_type').value = room.view_type;
-            document.getElementById('edit_hotel').value = room.hotel_id;
             document.getElementById('edit_amenities').value = JSON.parse(room.amenities).join(',');
-            document.getElementById('edit_image').value = room.image;
+            document.getElementById('edit_image_url').value = room.image;
             
             document.getElementById('editRoomModal').style.display = 'block';
         }
@@ -514,6 +549,49 @@ $rooms = getAllRooms();
                 event.target.style.display = 'none';
             }
         }
+
+        // Add this to your existing JavaScript
+        document.querySelectorAll('input[name="image_type"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                const urlInput = document.querySelector('input[name="image_url"]');
+                const fileInput = document.querySelector('input[name="image_upload"]');
+                
+                if (this.value === 'url') {
+                    urlInput.required = true;
+                    fileInput.required = false;
+                    urlInput.style.display = 'block';
+                    fileInput.style.display = 'none';
+                } else {
+                    urlInput.required = false;
+                    fileInput.required = true;
+                    urlInput.style.display = 'none';
+                    fileInput.style.display = 'block';
+                }
+            });
+        });
+
+        document.querySelectorAll('input[name="image_type"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                const urlInput = document.querySelector('input[name="image_url"]');
+                const fileInput = document.querySelector('input[name="image_upload"]');
+                
+                if (this.value === 'url') {
+                    urlInput.required = true;
+                    fileInput.required = false;
+                    urlInput.style.display = 'block';
+                    fileInput.style.display = 'none';
+                } else {
+                    urlInput.required = false;
+                    fileInput.required = true;
+                    urlInput.style.display = 'none';
+                    fileInput.style.display = 'block';
+                }
+            });
+        });
+
+        // Trigger change event on page load to set initial state
+        document.querySelector('input[name="image_type"]:checked').dispatchEvent(new Event('change'));
+        document.querySelector('input[name="image_type"]:checked').dispatchEvent(new Event('change'));
     </script>
 </body>
 </html>

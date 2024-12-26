@@ -180,7 +180,7 @@ $users = getAllUsers();
                                     <button type="submit" name="delete_user" class="admin-btn admin-btn-danger">Delete</button>
                                 </form>
                                 <?php endif; ?>
-                                <button class="admin-btn admin-btn-primary" onclick="viewUserDetails(<?php echo htmlspecialchars(json_encode($user)); ?>)">View Details</button>
+                                <a href="user_bookings.php?id=<?php echo $user['id']; ?>" class="admin-btn admin-btn-primary">View Details</a>
                             </td>
                         </tr>
                     <?php endforeach; ?>
@@ -189,70 +189,9 @@ $users = getAllUsers();
         </div>
     </div>
 
-    <!-- User Details Modal -->
-    <div id="userDetailsModal" class="modal">
-        <div class="modal-content">
-            <h2>User Details</h2>
-            <div id="userDetails"></div>
-            <button class="admin-btn" onclick="hideUserDetailsModal()">Close</button>
-        </div>
-    </div>
-
     <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
     <script>
         AOS.init();
-
-        function viewUserDetails(user) {
-            // Get user's bookings and reviews
-            fetch(`get_user_details.php?user_id=${user.id}`)
-                .then(response => response.json())
-                .then(data => {
-                    const details = `
-                        <div class="user-details">
-                            <h3>User Information</h3>
-                            <p><strong>Name:</strong> ${user.name}</p>
-                            <p><strong>Email:</strong> ${user.email}</p>
-                            <p><strong>Role:</strong> ${user.role}</p>
-                            <p><strong>Joined Date:</strong> ${new Date(user.created_at).toLocaleDateString()}</p>
-                            
-                            <h3>Bookings</h3>
-                            <div class="user-bookings">
-                                ${data.bookings.map(booking => `
-                                    <div class="booking-item">
-                                        <p><strong>Room:</strong> ${booking.room_name}</p>
-                                        <p><strong>Dates:</strong> ${new Date(booking.check_in).toLocaleDateString()} - ${new Date(booking.check_out).toLocaleDateString()}</p>
-                                        <p><strong>Status:</strong> ${booking.status}</p>
-                                    </div>
-                                `).join('')}
-                            </div>
-
-                            <h3>Reviews</h3>
-                            <div class="user-reviews">
-                                ${data.reviews.map(review => `
-                                    <div class="review-item">
-                                        <p><strong>Room:</strong> ${review.room_name}</p>
-                                        <p><strong>Rating:</strong> ${review.rating}/5</p>
-                                        <p><strong>Comment:</strong> ${review.comment}</p>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>
-                    `;
-                    document.getElementById('userDetails').innerHTML = details;
-                    document.getElementById('userDetailsModal').style.display = 'block';
-                });
-        }
-
-        function hideUserDetailsModal() {
-            document.getElementById('userDetailsModal').style.display = 'none';
-        }
-
-        // Close modal when clicking outside
-        window.onclick = function(event) {
-            if (event.target.className === 'modal') {
-                event.target.style.display = 'none';
-            }
-        }
     </script>
 </body>
 </html>

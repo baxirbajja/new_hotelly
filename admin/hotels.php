@@ -18,10 +18,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'city' => $_POST['city'],
                     'address' => $_POST['address'],
                     'description' => $_POST['description'],
-                    'image' => $_POST['image'],
                     'rating' => floatval($_POST['rating']),
                     'amenities' => json_encode(explode(',', $_POST['amenities']))
                 ];
+                if ($_POST['image_type'] === 'url') {
+                    $data['image'] = $_POST['image_url'];
+                } else {
+                    $data['image'] = uploadImage($_FILES['image_upload']);
+                }
                 if (addHotel($data)) {
                     $_SESSION['success'] = "Hotel added successfully!";
                 } else {
@@ -35,7 +39,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'city' => $_POST['city'],
                     'address' => $_POST['address'],
                     'description' => $_POST['description'],
-                    'image' => $_POST['image'],
                     'rating' => floatval($_POST['rating']),
                     'amenities' => json_encode(explode(',', $_POST['amenities']))
                 ];
@@ -124,6 +127,25 @@ unset($_SESSION['success'], $_SESSION['error']);
             gap: 10px;
             justify-content: flex-end;
         }
+        .image-input-group {
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 4px;
+        }
+        .input-option {
+            margin-bottom: 10px;
+        }
+        .input-option:last-child {
+            margin-bottom: 0;
+        }
+        .image-input {
+            width: 100%;
+            margin-top: 5px;
+        }
+        .input-option label {
+            margin-left: 5px;
+            display: inline-block;
+        }
     </style>
 </head>
 <body>
@@ -198,7 +220,7 @@ unset($_SESSION['success'], $_SESSION['error']);
     <div id="addHotelModal" class="modal">
         <div class="modal-content">
             <h2>Add New Hotel</h2>
-            <form method="POST" class="admin-form">
+            <form method="POST" class="admin-form" enctype="multipart/form-data">
                 <input type="hidden" name="action" value="add">
                 
                 <div class="form-group">
@@ -222,8 +244,19 @@ unset($_SESSION['success'], $_SESSION['error']);
                 </div>
 
                 <div class="form-group">
-                    <label>Image URL</label>
-                    <input type="url" name="image" required>
+                    <label>Image</label>
+                    <div class="image-input-group">
+                        <div class="input-option">
+                            <input type="radio" name="image_type" value="url" id="url_option" checked>
+                            <label for="url_option">Image URL</label>
+                            <input type="url" name="image_url" class="image-input" placeholder="Enter image URL">
+                        </div>
+                        <div class="input-option">
+                            <input type="radio" name="image_type" value="upload" id="upload_option">
+                            <label for="upload_option">Upload Image</label>
+                            <input type="file" name="image_upload" class="image-input" accept="image/*">
+                        </div>
+                    </div>
                 </div>
 
                 <div class="form-group">
@@ -237,8 +270,8 @@ unset($_SESSION['success'], $_SESSION['error']);
                 </div>
 
                 <div class="form-buttons">
-                    <button type="submit" class="admin-btn">Add Hotel</button>
-                    <button type="button" class="admin-btn admin-btn-secondary" onclick="closeAddModal()">Cancel</button>
+                    <button type="button" class="admin-btn" onclick="closeModal('addHotelModal')">Cancel</button>
+                    <button type="submit" class="admin-btn admin-btn-primary">Add Hotel</button>
                 </div>
             </form>
         </div>
@@ -307,8 +340,9 @@ unset($_SESSION['success'], $_SESSION['error']);
             addModal.style.display = 'block';
         }
 
-        function closeAddModal() {
-            addModal.style.display = 'none';
+        function closeModal(modalId) {
+            const modal = document.getElementById(modalId);
+            modal.style.display = 'none';
         }
 
         function showEditHotelModal(hotel) {
@@ -333,12 +367,35 @@ unset($_SESSION['success'], $_SESSION['error']);
         // Close modals when clicking outside
         window.onclick = function(event) {
             if (event.target == addModal) {
-                closeAddModal();
+                closeModal('addHotelModal');
             }
             if (event.target == editModal) {
                 closeEditModal();
             }
         }
+
+        // Add this to your existing JavaScript
+        document.querySelectorAll('input[name="image_type"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                const urlInput = document.querySelector('input[name="image_url"]');
+                const fileInput = document.querySelector('input[name="image_upload"]');
+                
+                if (this.value === 'url') {
+                    urlInput.required = true;
+                    fileInput.required = false;
+                    urlInput.style.display = 'block';
+                    fileInput.style.display = 'none';
+                } else {
+                    urlInput.required = false;
+                    fileInput.required = true;
+                    urlInput.style.display = 'none';
+                    fileInput.style.display = 'block';
+                }
+            });
+        });
+
+        // Trigger change event on page load to set initial state
+        document.querySelector('input[name="image_type"]:checked').dispatchEvent(new Event('change'));
     </script>
 </body>
 </html>

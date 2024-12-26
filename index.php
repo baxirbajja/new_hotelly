@@ -35,12 +35,17 @@ if (isset($_SESSION['user_id'])) {
         <a href="index.php" class="logo">HOTELLY</a>
         <div class="nav-right">
             <div class="nav-links">
-                <a href="index.php" class="nav-link">Home</a>
+                <?php if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'admin'): ?>
+                    <a href="index.php" class="nav-link">Home</a>
+                <?php endif; ?>
                 <a href="hotels.php" class="nav-link">Hotels</a>
                 <a href="rooms.php" class="nav-link">Rooms</a>
                 <?php if (isset($_SESSION['user_id'])): ?>
                     <a href="bookings.php" class="nav-link">My Bookings</a>
                     <a href="profile.php" class="nav-link"><?php echo htmlspecialchars($user_name); ?></a>
+                    <?php if (isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'admin'): ?>
+                        <a href="admin/index.php" class="nav-link admin-link">Dashboard</a>
+                    <?php endif; ?>
                     <a href="logout.php" class="nav-link">Logout</a>
                 <?php else: ?>
                     <a href="login.php" class="nav-link">Login</a>
@@ -53,7 +58,7 @@ if (isset($_SESSION['user_id'])) {
     <!-- Hero Section -->
     <div class="hero">
         <div class="hero-content" data-aos="fade-up" data-aos-duration="1000">
-            <h1 class="serif">A NEW HOTEL IN<br>COPENHAGEN</h1>
+            <h1 class="serif">A NEW HOTEL IN<br>MOROCCO</h1>
             <p class="subtitle">Experience the perfect blend of modern comfort and timeless elegance in the heart of the city.</p>
             <div class="buttons">
                 <a href="rooms.php" class="btn btn-outline">View Rooms</a>
@@ -98,7 +103,7 @@ if (isset($_SESSION['user_id'])) {
             <div class="footer-content">
                 <div class="footer-section">
                     <h3 class="serif">HOTELLY</h3>
-                    <p>Experience luxury and comfort in the heart of Copenhagen.</p>
+                    <p>Experience luxury and comfort in the heart of MOROCCO.</p>
                 </div>
                 <div class="footer-section">
                     <h4>Quick Links</h4>
@@ -115,11 +120,11 @@ if (isset($_SESSION['user_id'])) {
                 </div>
                 <div class="footer-section">
                     <h4>Contact</h4>
-                    <p>123 Hotel Street<br>Copenhagen, Denmark<br>Phone: +45 12 34 56 78<br>Email: info@hotelly.com</p>
+                    <p>123 Hotel Street<br>Tamesna, Morocco<br>Phone: +212 63 74 92 006<br>Email: medbachirbajja@gmail.com</p>
                 </div>
             </div>
             <div class="footer-bottom">
-                <p>&copy; <?php echo date('Y'); ?> Hotelly. All rights reserved.</p>
+                <p>&copy; <?php echo date('Y'); ?> Hotelly/baxir. All rights reserved.</p>
             </div>
         </div>
     </footer>

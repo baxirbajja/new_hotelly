@@ -228,6 +228,22 @@ function getBookingsByUser($userId) {
     return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 }
 
+function updateBookingStatus($bookingId, $status) {
+    global $conn;
+    $sql = "UPDATE bookings SET status = ? WHERE id = ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("si", $status, $bookingId);
+    return $stmt->execute();
+}
+
+function deleteBooking($bookingId) {
+    global $conn;
+    $sql = "DELETE FROM bookings WHERE id = ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("i", $bookingId);
+    return $stmt->execute();
+}
+
 // Review functions
 function createReview($bookingId, $userId, $roomId, $rating, $comment) {
     global $conn;
@@ -376,21 +392,6 @@ function getAllBookings($limit = null) {
     return $result->fetch_all(MYSQLI_ASSOC);
 }
 
-function updateBookingStatus($id, $status) {
-    global $conn;
-    $sql = "UPDATE bookings SET status = ? WHERE id = ?";
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param("si", $status, $id);
-    return $stmt->execute();
-}
-
-function deleteBooking($bookingId) {
-    global $conn;
-    $stmt = $conn->prepare("DELETE FROM bookings WHERE id = ?");
-    $stmt->bind_param("i", $bookingId);
-    return $stmt->execute();
-}
-
 function getAllUsers($limit = null) {
     global $conn;
     $sql = "SELECT id, name, email, role, created_at FROM users ORDER BY created_at DESC";
@@ -465,6 +466,41 @@ function updateReviewStatus($id, $status) {
     $stmt = $conn->prepare($sql);
     $stmt->bind_param("si", $status, $id);
     return $stmt->execute();
+}
+
+function uploadImage($file) {
+    // Create uploads directory if it doesn't exist
+    $target_dir = "../uploads";
+    if (!file_exists($target_dir)) {
+        mkdir($target_dir, 0777, true);
+    }
+
+    // Generate unique filename
+    $imageFileType = strtolower(pathinfo($file["name"], PATHINFO_EXTENSION));
+    $target_file = $target_dir . uniqid() . '.' . $imageFileType;
+    
+    // Check if image file is a actual image or fake image
+    $check = getimagesize($file["tmp_name"]);
+    if($check === false) {
+        throw new Exception("File is not an image.");
+    }
+    
+    // Check file size (limit to 5MB)
+    if ($file["size"] > 5000000) {
+        throw new Exception("File is too large. Maximum size is 5MB.");
+    }
+    
+    // Allow certain file formats
+    if($imageFileType != "jpg" && $imageFileType != "png" && $imageFileType != "jpeg" && $imageFileType != "gif" ) {
+        throw new Exception("Only JPG, JPEG, PNG & GIF files are allowed.");
+    }
+    
+    // Try to upload file
+    if (move_uploaded_file($file["tmp_name"], $target_file)) {
+        return str_replace("..", "", $target_file); // Return relative path
+    } else {
+        throw new Exception("Sorry, there was an error uploading your file.");
+    }
 }
 
 ?>
