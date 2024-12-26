@@ -76,6 +76,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         <div class="nav-right">
             <div class="nav-links">
                 <a href="index.php" class="nav-link">Home</a>
+                <a href="hotels.php" class="nav-link">Hotels</a>
                 <a href="rooms.php" class="nav-link">Rooms</a>
                 <?php if (isset($_SESSION['user_id'])): ?>
                     <a href="bookings.php" class="nav-link">My Bookings</a>
@@ -89,7 +90,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         </div>
     </nav>
 
-    <div class="container">
+    <div class="container" style="padding-top: 8rem;">
         <div class="profile-section">
             <h1>My Profile</h1>
             

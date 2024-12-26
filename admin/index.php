@@ -48,6 +48,7 @@ $stats = [
         </div>
         <div class="admin-nav-right">
             <a href="index.php" class="nav-link active">Dashboard</a>
+            <a href="hotels.php" class="nav-link">Hotels</a>
             <a href="rooms.php" class="nav-link">Rooms</a>
             <a href="bookings.php" class="nav-link">Bookings</a>
             <a href="users.php" class="nav-link">Users</a>

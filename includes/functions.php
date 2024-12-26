@@ -5,6 +5,21 @@ require_once 'config.php';
 function initializeDatabase() {
     global $conn;
     
+    // Create hotels table if it doesn't exist
+    $sql = "CREATE TABLE IF NOT EXISTS hotels (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        name VARCHAR(255) NOT NULL,
+        city VARCHAR(100) NOT NULL,
+        address TEXT NOT NULL,
+        description TEXT,
+        image VARCHAR(255),
+        rating DECIMAL(2,1) DEFAULT 0,
+        amenities JSON,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )";
+    $conn->query($sql);
+
     // Create reviews table if it doesn't exist
     $sql = "CREATE TABLE IF NOT EXISTS reviews (
         id INT PRIMARY KEY AUTO_INCREMENT,
@@ -35,17 +50,158 @@ initializeDatabase();
 // Room functions
 function getAllRooms() {
     global $conn;
-    $sql = "SELECT * FROM rooms WHERE is_available = TRUE";
+    $sql = "SELECT r.*, h.name as hotel_name, h.city as hotel_city 
+            FROM rooms r 
+            LEFT JOIN hotels h ON r.hotel_id = h.id 
+            WHERE r.is_available = TRUE";
     $result = $conn->query($sql);
     return $result->fetch_all(MYSQLI_ASSOC);
 }
 
 function getRoomById($id) {
     global $conn;
-    $stmt = $conn->prepare("SELECT * FROM rooms WHERE id = ?");
+    $stmt = $conn->prepare("SELECT r.*, h.name as hotel_name, h.city as hotel_city 
+                           FROM rooms r 
+                           LEFT JOIN hotels h ON r.hotel_id = h.id 
+                           WHERE r.id = ?");
     $stmt->bind_param("i", $id);
     $stmt->execute();
     return $stmt->get_result()->fetch_assoc();
+}
+
+// Room Management functions
+function addRoom($data) {
+    global $conn;
+    $sql = "INSERT INTO rooms (name, type, description, price, capacity, size, view_type, amenities, image, hotel_id, is_available) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("sssdiisssi", 
+        $data['name'],
+        $data['type'],
+        $data['description'],
+        $data['price'],
+        $data['capacity'],
+        $data['size'],
+        $data['view_type'],
+        $data['amenities'],
+        $data['image'],
+        $data['hotel_id']
+    );
+    return $stmt->execute();
+}
+
+function updateRoom($id, $data) {
+    global $conn;
+    $sql = "UPDATE rooms 
+            SET name = ?, type = ?, description = ?, price = ?, 
+                capacity = ?, size = ?, view_type = ?, amenities = ?, 
+                image = ?, hotel_id = ? 
+            WHERE id = ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("sssdiisssii", 
+        $data['name'],
+        $data['type'],
+        $data['description'],
+        $data['price'],
+        $data['capacity'],
+        $data['size'],
+        $data['view_type'],
+        $data['amenities'],
+        $data['image'],
+        $data['hotel_id'],
+        $id
+    );
+    return $stmt->execute();
+}
+
+function deleteRoom($id) {
+    global $conn;
+    // Check if room has any bookings
+    $stmt = $conn->prepare("SELECT COUNT(*) as count FROM bookings WHERE room_id = ?");
+    $stmt->bind_param("i", $id);
+    $stmt->execute();
+    $result = $stmt->get_result()->fetch_assoc();
+    
+    if ($result['count'] > 0) {
+        return false; // Cannot delete room with bookings
+    }
+    
+    $stmt = $conn->prepare("DELETE FROM rooms WHERE id = ?");
+    $stmt->bind_param("i", $id);
+    return $stmt->execute();
+}
+
+// Hotel Management functions
+function getAllHotels($limit = null) {
+    global $conn;
+    $sql = "SELECT * FROM hotels ORDER BY created_at DESC";
+    if ($limit) {
+        $sql .= " LIMIT " . (int)$limit;
+    }
+    $result = $conn->query($sql);
+    return $result->fetch_all(MYSQLI_ASSOC);
+}
+
+function getHotelById($id) {
+    global $conn;
+    $stmt = $conn->prepare("SELECT * FROM hotels WHERE id = ?");
+    $stmt->bind_param("i", $id);
+    $stmt->execute();
+    return $stmt->get_result()->fetch_assoc();
+}
+
+function addHotel($data) {
+    global $conn;
+    $sql = "INSERT INTO hotels (name, city, address, description, image, rating, amenities) 
+            VALUES (?, ?, ?, ?, ?, ?, ?)";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("sssssds", 
+        $data['name'],
+        $data['city'],
+        $data['address'],
+        $data['description'],
+        $data['image'],
+        $data['rating'],
+        $data['amenities']
+    );
+    return $stmt->execute();
+}
+
+function updateHotel($id, $data) {
+    global $conn;
+    $sql = "UPDATE hotels 
+            SET name = ?, city = ?, address = ?, description = ?, 
+                image = ?, rating = ?, amenities = ? 
+            WHERE id = ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("sssssdsi", 
+        $data['name'],
+        $data['city'],
+        $data['address'],
+        $data['description'],
+        $data['image'],
+        $data['rating'],
+        $data['amenities'],
+        $id
+    );
+    return $stmt->execute();
+}
+
+function deleteHotel($id) {
+    global $conn;
+    // First check if hotel has any rooms
+    $stmt = $conn->prepare("SELECT COUNT(*) as count FROM rooms WHERE hotel_id = ?");
+    $stmt->bind_param("i", $id);
+    $stmt->execute();
+    $result = $stmt->get_result()->fetch_assoc();
+    
+    if ($result['count'] > 0) {
+        return false; // Cannot delete hotel with rooms
+    }
+    
+    $stmt = $conn->prepare("DELETE FROM hotels WHERE id = ?");
+    $stmt->bind_param("i", $id);
+    return $stmt->execute();
 }
 
 // Booking functions
@@ -187,207 +343,7 @@ function getAdminDashboardStats() {
     }
     $stats['monthly_revenue'] = $monthly_revenue;
 
-    // Get recent activity
-    $sql = "SELECT 'booking' as type, 
-                   CONCAT(u.name, ' made a booking for ', r.name) as description,
-                   b.created_at as time
-            FROM bookings b 
-            JOIN users u ON b.user_id = u.id 
-            JOIN rooms r ON b.room_id = r.id 
-            UNION ALL 
-            SELECT 'review' as type,
-                   CONCAT(u.name, ' reviewed ', r.name) as description,
-                   rv.created_at as time
-            FROM reviews rv 
-            JOIN users u ON rv.user_id = u.id 
-            JOIN rooms r ON rv.room_id = r.id 
-            ORDER BY time DESC 
-            LIMIT 10";
-    $result = $conn->query($sql);
-    $stats['recent_activity'] = [];
-    while ($row = $result->fetch_assoc()) {
-        $stats['recent_activity'][] = [
-            'type' => $row['type'],
-            'description' => $row['description'],
-            'time' => date('M j, Y g:i A', strtotime($row['time']))
-        ];
-    }
-
     return $stats;
-}
-
-// Room Management functions
-function addRoom($data) {
-    global $conn;
-    $sql = "INSERT INTO rooms (name, type, description, price, capacity, size, view_type, amenities, image) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param("sssdiisss", 
-        $data['name'],
-        $data['type'],
-        $data['description'],
-        $data['price'],
-        $data['capacity'],
-        $data['size'],
-        $data['view_type'],
-        $data['amenities'],
-        $data['image']
-    );
-    return $stmt->execute();
-}
-
-function updateRoom($id, $data) {
-    global $conn;
-    $sql = "UPDATE rooms 
-            SET name = ?, type = ?, description = ?, price = ?, 
-                capacity = ?, size = ?, view_type = ?, amenities = ?, image = ? 
-            WHERE id = ?";
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param("sssdiisssi", 
-        $data['name'],
-        $data['type'],
-        $data['description'],
-        $data['price'],
-        $data['capacity'],
-        $data['size'],
-        $data['view_type'],
-        $data['amenities'],
-        $data['image'],
-        $id
-    );
-    return $stmt->execute();
-}
-
-function deleteRoom($id) {
-    global $conn;
-    // First check if room has any bookings
-    $sql = "SELECT COUNT(*) as count FROM bookings WHERE room_id = ?";
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param("i", $id);
-    $stmt->execute();
-    $result = $stmt->get_result()->fetch_assoc();
-    
-    if ($result['count'] > 0) {
-        return false; // Can't delete room with bookings
-    }
-    
-    // Delete room if no bookings
-    $sql = "DELETE FROM rooms WHERE id = ?";
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param("i", $id);
-    return $stmt->execute();
-}
-
-// Booking Management functions
-function updateBookingStatus($id, $status) {
-    global $conn;
-    $sql = "UPDATE bookings SET status = ? WHERE id = ?";
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param("si", $status, $id);
-    return $stmt->execute();
-}
-
-function getAllBookings($limit = null) {
-    global $conn;
-    $sql = "SELECT b.*, r.name as room_name, u.name as user_name 
-            FROM bookings b 
-            JOIN rooms r ON b.room_id = r.id 
-            JOIN users u ON b.user_id = u.id 
-            ORDER BY b.created_at DESC";
-    if ($limit) {
-        $sql .= " LIMIT " . (int)$limit;
-    }
-    $result = $conn->query($sql);
-    return $result->fetch_all(MYSQLI_ASSOC);
-}
-
-// User Management functions
-function getAllUsers($limit = null) {
-    global $conn;
-    $sql = "SELECT id, name, email, role, created_at FROM users ORDER BY created_at DESC";
-    if ($limit) {
-        $sql .= " LIMIT " . (int)$limit;
-    }
-    $result = $conn->query($sql);
-    return $result->fetch_all(MYSQLI_ASSOC);
-}
-
-function updateUserStatus($id, $status) {
-    global $conn;
-    $sql = "UPDATE users SET status = ? WHERE id = ?";
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param("si", $status, $id);
-    return $stmt->execute();
-}
-
-function updateUserRole($id, $role) {
-    global $conn;
-    $sql = "UPDATE users SET role = ? WHERE id = ?";
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param("si", $role, $id);
-    return $stmt->execute();
-}
-
-// Delete user function
-function deleteUser($userId) {
-    global $conn;
-    $userId = mysqli_real_escape_string($conn, $userId);
-    
-    // First delete all bookings associated with this user
-    $bookingQuery = "DELETE FROM bookings WHERE user_id = '$userId'";
-    mysqli_query($conn, $bookingQuery);
-    
-    // Then delete all reviews associated with this user
-    $reviewQuery = "DELETE FROM reviews WHERE user_id = '$userId'";
-    mysqli_query($conn, $reviewQuery);
-    
-    // Finally delete the user
-    $userQuery = "DELETE FROM users WHERE id = '$userId'";
-    return mysqli_query($conn, $userQuery);
-}
-
-// Delete booking function
-function deleteBooking($bookingId) {
-    global $conn;
-    $bookingId = mysqli_real_escape_string($conn, $bookingId);
-    
-    // Delete the booking
-    $query = "DELETE FROM bookings WHERE id = '$bookingId'";
-    return mysqli_query($conn, $query);
-}
-
-// Review Management functions
-function getAllReviews($limit = null) {
-    global $conn;
-    $sql = "SELECT r.*, u.name as user_name, rm.name as room_name 
-            FROM reviews r 
-            JOIN users u ON r.user_id = u.id 
-            JOIN rooms rm ON r.room_id = rm.id 
-            ORDER BY r.created_at DESC";
-    if ($limit) {
-        $sql .= " LIMIT " . (int)$limit;
-    }
-    $result = $conn->query($sql);
-    return $result->fetch_all(MYSQLI_ASSOC);
-}
-
-function updateReviewStatus($id, $status) {
-    global $conn;
-    if (!in_array($status, ['pending', 'approved', 'hidden'])) {
-        return false;
-    }
-    
-    // First check if status column exists
-    $result = $conn->query("SHOW COLUMNS FROM reviews LIKE 'status'");
-    if ($result->num_rows === 0) {
-        // Add status column if it doesn't exist
-        $conn->query("ALTER TABLE reviews ADD COLUMN status ENUM('pending', 'approved', 'hidden') NOT NULL DEFAULT 'pending'");
-    }
-    
-    $sql = "UPDATE reviews SET status = ? WHERE id = ?";
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param("si", $status, $id);
-    return $stmt->execute();
 }
 
 // Get booked dates for a room
@@ -402,6 +358,113 @@ function getBookedDates($roomId) {
     $stmt->bind_param("i", $roomId);
     $stmt->execute();
     return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+}
+
+// Admin Management Functions
+function getAllBookings($limit = null) {
+    global $conn;
+    $sql = "SELECT b.*, r.name as room_name, u.name as user_name, h.name as hotel_name 
+            FROM bookings b 
+            JOIN rooms r ON b.room_id = r.id 
+            JOIN users u ON b.user_id = u.id 
+            LEFT JOIN hotels h ON r.hotel_id = h.id 
+            ORDER BY b.created_at DESC";
+    if ($limit) {
+        $sql .= " LIMIT " . (int)$limit;
+    }
+    $result = $conn->query($sql);
+    return $result->fetch_all(MYSQLI_ASSOC);
+}
+
+function updateBookingStatus($id, $status) {
+    global $conn;
+    $sql = "UPDATE bookings SET status = ? WHERE id = ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("si", $status, $id);
+    return $stmt->execute();
+}
+
+function deleteBooking($bookingId) {
+    global $conn;
+    $stmt = $conn->prepare("DELETE FROM bookings WHERE id = ?");
+    $stmt->bind_param("i", $bookingId);
+    return $stmt->execute();
+}
+
+function getAllUsers($limit = null) {
+    global $conn;
+    $sql = "SELECT id, name, email, role, created_at FROM users ORDER BY created_at DESC";
+    if ($limit) {
+        $sql .= " LIMIT " . (int)$limit;
+    }
+    $result = $conn->query($sql);
+    return $result->fetch_all(MYSQLI_ASSOC);
+}
+
+function updateUserRole($id, $role) {
+    global $conn;
+    $sql = "UPDATE users SET role = ? WHERE id = ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("si", $role, $id);
+    return $stmt->execute();
+}
+
+function deleteUser($userId) {
+    global $conn;
+    // Start transaction
+    $conn->begin_transaction();
+    
+    try {
+        // Delete user's reviews
+        $stmt = $conn->prepare("DELETE FROM reviews WHERE user_id = ?");
+        $stmt->bind_param("i", $userId);
+        $stmt->execute();
+        
+        // Delete user's bookings
+        $stmt = $conn->prepare("DELETE FROM bookings WHERE user_id = ?");
+        $stmt->bind_param("i", $userId);
+        $stmt->execute();
+        
+        // Finally delete the user
+        $stmt = $conn->prepare("DELETE FROM users WHERE id = ?");
+        $stmt->bind_param("i", $userId);
+        $stmt->execute();
+        
+        // Commit transaction
+        $conn->commit();
+        return true;
+    } catch (Exception $e) {
+        // Rollback on error
+        $conn->rollback();
+        return false;
+    }
+}
+
+function getAllReviews($limit = null) {
+    global $conn;
+    $sql = "SELECT r.*, u.name as user_name, rm.name as room_name, h.name as hotel_name 
+            FROM reviews r 
+            JOIN users u ON r.user_id = u.id 
+            JOIN rooms rm ON r.room_id = rm.id 
+            LEFT JOIN hotels h ON rm.hotel_id = h.id 
+            ORDER BY r.created_at DESC";
+    if ($limit) {
+        $sql .= " LIMIT " . (int)$limit;
+    }
+    $result = $conn->query($sql);
+    return $result->fetch_all(MYSQLI_ASSOC);
+}
+
+function updateReviewStatus($id, $status) {
+    global $conn;
+    if (!in_array($status, ['pending', 'approved', 'hidden'])) {
+        return false;
+    }
+    
+    $sql = "UPDATE reviews SET status = ? WHERE id = ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("si", $status, $id);
+    return $stmt->execute();
 }
 
 ?>

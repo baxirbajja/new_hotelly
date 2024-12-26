@@ -42,9 +42,63 @@ unset($review); // Break the reference
     <title>Review Management - Hotelly Admin</title>
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Montserrat:wght@300;400;500;600&display=swap" rel="stylesheet">
     <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
-    <link rel="stylesheet" href="../css/style.css">
     <link rel="stylesheet" href="../css/admin.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <style>
+        .admin-nav {
+            background: var(--secondary-color);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: fixed;
+            width: 100%;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            box-sizing: border-box;
+        }
+        .admin-nav-left {
+            display: flex;
+            align-items: center;
+        }
+        .admin-nav .logo {
+            color: var(--primary-color);
+            font-size: 1.5rem;
+            font-weight: bold;
+            text-decoration: none;
+            font-family: 'Playfair Display', serif;
+            transition: color 0.3s;
+        }
+        .admin-nav .logo:hover {
+            color: #fff;
+        }
+        .admin-nav-right {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+        }
+        .admin-nav-right .nav-link {
+            color: #fff;
+            text-decoration: none;
+            margin-left: 2rem;
+            font-family: 'Montserrat', sans-serif;
+            transition: color 0.3s;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .admin-nav-right .nav-link:hover,
+        .admin-nav-right .nav-link.active {
+            color: var(--primary-color);
+        }
+        .admin-container {
+            padding: 6rem 2rem 2rem;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+    </style>
 </head>
 <body>
     <!-- Admin Navigation -->
@@ -54,11 +108,12 @@ unset($review); // Break the reference
         </div>
         <div class="admin-nav-right">
             <a href="index.php" class="nav-link">Dashboard</a>
+            <a href="hotels.php" class="nav-link">Hotels</a>
             <a href="rooms.php" class="nav-link">Rooms</a>
             <a href="bookings.php" class="nav-link">Bookings</a>
             <a href="users.php" class="nav-link">Users</a>
             <a href="reviews.php" class="nav-link active">Reviews</a>
-            <a href="../logout.php" class="nav-link">Logout</a>
+            <a href="../includes/logout.php" class="nav-link">Logout</a>
         </div>
     </nav>
 
