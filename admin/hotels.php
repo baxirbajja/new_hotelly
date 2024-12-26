@@ -23,8 +23,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ];
                 if ($_POST['image_type'] === 'url') {
                     $data['image'] = $_POST['image_url'];
-                } else {
-                    $data['image'] = uploadImage($_FILES['image_upload']);
+                } else if (isset($_FILES['image_upload']) && $_FILES['image_upload']['error'] === UPLOAD_ERR_OK) {
+                    try {
+                        $data['image'] = uploadImage($_FILES['image_upload']);
+                    } catch (Exception $e) {
+                        $_SESSION['error'] = "Error uploading image: " . $e->getMessage();
+                        header('Location: hotels.php');
+                        exit;
+                    }
                 }
                 if (addHotel($data)) {
                     $_SESSION['success'] = "Hotel added successfully!";
@@ -42,6 +48,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'rating' => floatval($_POST['rating']),
                     'amenities' => json_encode(explode(',', $_POST['amenities']))
                 ];
+
+                // Handle image update
+                if ($_POST['image_type'] === 'url') {
+                    $data['image'] = $_POST['image_url'];
+                } else if (isset($_FILES['image_upload']) && $_FILES['image_upload']['error'] === UPLOAD_ERR_OK) {
+                    try {
+                        $data['image'] = uploadImage($_FILES['image_upload']);
+                    } catch (Exception $e) {
+                        $_SESSION['error'] = "Error uploading image: " . $e->getMessage();
+                        header('Location: hotels.php');
+                        exit;
+                    }
+                }
+
                 if (updateHotel($_POST['hotel_id'], $data)) {
                     $_SESSION['success'] = "Hotel updated successfully!";
                 } else {
@@ -281,7 +301,7 @@ unset($_SESSION['success'], $_SESSION['error']);
     <div id="editHotelModal" class="modal">
         <div class="modal-content">
             <h2>Edit Hotel</h2>
-            <form method="POST" class="admin-form">
+            <form method="POST" class="admin-form" enctype="multipart/form-data">
                 <input type="hidden" name="action" value="edit">
                 <input type="hidden" name="hotel_id" id="edit_hotel_id">
                 
@@ -306,8 +326,19 @@ unset($_SESSION['success'], $_SESSION['error']);
                 </div>
 
                 <div class="form-group">
-                    <label>Image URL</label>
-                    <input type="url" name="image" id="edit_image" required>
+                    <label>Image</label>
+                    <div class="image-input-group">
+                        <div class="input-option">
+                            <input type="radio" name="image_type" value="url" id="edit_url_option" checked>
+                            <label for="edit_url_option">Image URL</label>
+                            <input type="url" name="image_url" id="edit_image" class="image-input" placeholder="Enter image URL">
+                        </div>
+                        <div class="input-option">
+                            <input type="radio" name="image_type" value="upload" id="edit_upload_option">
+                            <label for="edit_upload_option">Upload New Image</label>
+                            <input type="file" name="image_upload" class="image-input" accept="image/*">
+                        </div>
+                    </div>
                 </div>
 
                 <div class="form-group">
@@ -321,8 +352,8 @@ unset($_SESSION['success'], $_SESSION['error']);
                 </div>
 
                 <div class="form-buttons">
-                    <button type="submit" class="admin-btn">Update Hotel</button>
-                    <button type="button" class="admin-btn admin-btn-secondary" onclick="closeEditModal()">Cancel</button>
+                    <button type="button" class="admin-btn" onclick="closeModal('editHotelModal')">Cancel</button>
+                    <button type="submit" class="admin-btn admin-btn-primary">Update Hotel</button>
                 </div>
             </form>
         </div>
@@ -341,8 +372,7 @@ unset($_SESSION['success'], $_SESSION['error']);
         }
 
         function closeModal(modalId) {
-            const modal = document.getElementById(modalId);
-            modal.style.display = 'none';
+            document.getElementById(modalId).style.display = 'none';
         }
 
         function showEditHotelModal(hotel) {
@@ -351,51 +381,65 @@ unset($_SESSION['success'], $_SESSION['error']);
             document.getElementById('edit_city').value = hotel.city;
             document.getElementById('edit_address').value = hotel.address;
             document.getElementById('edit_description').value = hotel.description;
-            document.getElementById('edit_image').value = hotel.image;
+            document.getElementById('edit_image').value = hotel.image || '';
             document.getElementById('edit_rating').value = hotel.rating;
             
-            const amenities = JSON.parse(hotel.amenities);
-            document.getElementById('edit_amenities').value = amenities.join(',');
+            try {
+                const amenities = typeof hotel.amenities === 'string' ? 
+                    JSON.parse(hotel.amenities) : 
+                    hotel.amenities || [];
+                document.getElementById('edit_amenities').value = Array.isArray(amenities) ? 
+                    amenities.join(',') : 
+                    '';
+            } catch (e) {
+                document.getElementById('edit_amenities').value = '';
+                console.error('Error parsing amenities:', e);
+            }
             
             editModal.style.display = 'block';
         }
 
-        function closeEditModal() {
-            editModal.style.display = 'none';
-        }
-
         // Close modals when clicking outside
         window.onclick = function(event) {
-            if (event.target == addModal) {
+            if (event.target === addModal) {
                 closeModal('addHotelModal');
             }
-            if (event.target == editModal) {
-                closeEditModal();
+            if (event.target === editModal) {
+                closeModal('editHotelModal');
             }
         }
 
-        // Add this to your existing JavaScript
-        document.querySelectorAll('input[name="image_type"]').forEach(radio => {
-            radio.addEventListener('change', function() {
-                const urlInput = document.querySelector('input[name="image_url"]');
-                const fileInput = document.querySelector('input[name="image_upload"]');
-                
-                if (this.value === 'url') {
-                    urlInput.required = true;
-                    fileInput.required = false;
-                    urlInput.style.display = 'block';
-                    fileInput.style.display = 'none';
-                } else {
-                    urlInput.required = false;
-                    fileInput.required = true;
-                    urlInput.style.display = 'none';
-                    fileInput.style.display = 'block';
-                }
-            });
-        });
+        // Handle image input type switching
+        function setupImageInputs(formPrefix = '') {
+            const prefix = formPrefix ? formPrefix + '_' : '';
+            const radioInputs = document.querySelectorAll(`input[name="${prefix}image_type"]`);
+            const urlInput = document.querySelector(`input[name="${prefix}image_url"]`);
+            const fileInput = document.querySelector(`input[name="${prefix}image_upload"]`);
+            
+            if (radioInputs && urlInput && fileInput) {
+                radioInputs.forEach(radio => {
+                    radio.addEventListener('change', function() {
+                        if (this.value === 'url') {
+                            urlInput.style.display = 'block';
+                            fileInput.style.display = 'none';
+                            urlInput.required = true;
+                            fileInput.required = false;
+                        } else {
+                            urlInput.style.display = 'none';
+                            fileInput.style.display = 'block';
+                            urlInput.required = false;
+                            fileInput.required = true;
+                        }
+                    });
+                });
+            }
+        }
 
-        // Trigger change event on page load to set initial state
-        document.querySelector('input[name="image_type"]:checked').dispatchEvent(new Event('change'));
+        // Setup image inputs for both forms
+        document.addEventListener('DOMContentLoaded', function() {
+            setupImageInputs();
+            setupImageInputs('edit');
+        });
     </script>
 </body>
 </html>
