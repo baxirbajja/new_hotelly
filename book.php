@@ -14,27 +14,54 @@ $success = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $room_id = $_POST['room_id'];
-    $check_in = $_POST['check_in'];
-    $check_out = $_POST['check_out'];
+    $dates = $_POST['dates'];
     $total_price = $_POST['total_price'];
     $user_id = $_SESSION['user_id'];
 
-    // Validate dates
-    $check_in_date = strtotime($check_in);
-    $check_out_date = strtotime($check_out);
-    $today = strtotime(date('Y-m-d'));
-
-    if ($check_in_date < $today) {
-        $error = "Check-in date cannot be in the past";
-    } elseif ($check_out_date <= $check_in_date) {
-        $error = "Check-out date must be after check-in date";
+    // Split the date range
+    $date_parts = explode(' - ', $dates);
+    if (count($date_parts) !== 2) {
+        $error = "Invalid date range";
     } else {
-        if (createBooking($room_id, $user_id, $check_in, $check_out, $total_price)) {
-            $_SESSION['success'] = "Booking created successfully!";
-            header('Location: bookings.php');
-            exit;
+        $check_in = date('Y-m-d', strtotime($date_parts[0]));
+        $check_out = date('Y-m-d', strtotime($date_parts[1]));
+
+        // Validate dates
+        $check_in_date = strtotime($check_in);
+        $check_out_date = strtotime($check_out);
+        $today = strtotime(date('Y-m-d'));
+
+        if ($check_in_date < $today) {
+            $error = "Check-in date cannot be in the past";
+        } elseif ($check_out_date <= $check_in_date) {
+            $error = "Check-out date must be after check-in date";
         } else {
-            $error = "Failed to create booking. Please try again.";
+            // Verify dates are still available
+            $booked_dates = getBookedDates($room_id);
+            $is_available = true;
+            
+            $current_date = new DateTime($check_in);
+            $end_date = new DateTime($check_out);
+            
+            while ($current_date < $end_date) {
+                if (in_array($current_date->format('Y-m-d'), $booked_dates)) {
+                    $is_available = false;
+                    break;
+                }
+                $current_date->modify('+1 day');
+            }
+
+            if (!$is_available) {
+                $error = "Selected dates are no longer available";
+            } else {
+                if (createBooking($room_id, $user_id, $check_in, $check_out, $total_price)) {
+                    $_SESSION['success'] = "Booking created successfully!";
+                    header('Location: bookings.php');
+                    exit;
+                } else {
+                    $error = "Failed to create booking. Please try again.";
+                }
+            }
         }
     }
 }
@@ -52,19 +79,11 @@ if (isset($_GET['room_id'])) {
 // Get booked dates for the room
 $booked_dates = [];
 if ($room) {
-    $bookings = getBookedDates($room['id']);
-    foreach ($bookings as $booking) {
-        $start = strtotime($booking['check_in']);
-        $end = strtotime($booking['check_out']);
-        $current = $start;
-        
-        // Add all dates between check-in and check-out
-        while ($current <= $end) {
-            $booked_dates[] = date('Y-m-d', $current);
-            $current = strtotime('+1 day', $current);
-        }
-    }
+    $booked_dates = getBookedDates($room['id']);
 }
+
+// Convert booked dates to JSON for JavaScript
+$booked_dates_json = json_encode($booked_dates);
 ?>
 
 <!DOCTYPE html>
@@ -72,58 +91,50 @@ if ($room) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Book Room - Hotelly</title>
+    <title>Book Room - <?php echo htmlspecialchars($room['name']); ?></title>
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Montserrat:wght@300;400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
     <link rel="stylesheet" href="css/style.css">
     <style>
         .booking-form {
             max-width: 600px;
-            margin: 2rem auto;
-            padding: 2rem;
-            background: #fff;
-            border-radius: 10px;
-            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            margin: 40px auto;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
         .form-group {
-            margin-bottom: 1.5rem;
+            margin-bottom: 20px;
         }
         .form-group label {
             display: block;
-            margin-bottom: 0.5rem;
+            margin-bottom: 5px;
             font-weight: 500;
         }
         .form-control {
             width: 100%;
-            padding: 0.8rem;
+            padding: 8px 12px;
             border: 1px solid #ddd;
-            border-radius: 5px;
-            font-size: 1rem;
+            border-radius: 4px;
         }
-        .room-details {
-            margin-bottom: 2rem;
-            padding: 1rem;
-            background: #f8f9fa;
-            border-radius: 5px;
+        .booking-total {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f8f8;
+            border-radius: 4px;
         }
-        .error {
-            color: #dc3545;
-            margin-bottom: 1rem;
-            padding: 0.5rem;
-            border-radius: 5px;
-            background: #ffe6e6;
+        .error-message {
+            color: #d32f2f;
+            margin-bottom: 15px;
         }
-        .success {
-            color: #28a745;
-            margin-bottom: 1rem;
-            padding: 0.5rem;
-            border-radius: 5px;
-            background: #e6ffe6;
-        }
-        .flatpickr-day.disabled {
-            color: #ccc;
-            background: #f8f9fa;
+        .booked-date {
+            background-color: #ffebee !important;
+            color: #d32f2f !important;
             text-decoration: line-through;
+        }
+        main {
+            margin-top: 120px;
         }
     </style>
 </head>
@@ -131,85 +142,68 @@ if ($room) {
     <?php include 'includes/header.php'; ?>
 
     <main>
-        <div class="booking-form">
-            <h2>Book Room</h2>
-            
-            <?php if ($error): ?>
-                <div class="error"><?php echo htmlspecialchars($error); ?></div>
-            <?php endif; ?>
+        <div class="container">
+            <div class="booking-form">
+                <h1 class="serif">Book <?php echo htmlspecialchars($room['name']); ?></h1>
+                
+                <?php if ($error): ?>
+                    <div class="error-message"><?php echo htmlspecialchars($error); ?></div>
+                <?php endif; ?>
 
-            <?php if ($room): ?>
-                <div class="room-details">
-                    <h3><?php echo htmlspecialchars($room['name']); ?></h3>
-                    <p>Price per night: $<?php echo number_format($room['price'], 2); ?></p>
-                </div>
-
-                <form method="POST" action="" id="bookingForm">
+                <form method="POST">
                     <input type="hidden" name="room_id" value="<?php echo $room['id']; ?>">
-                    <input type="hidden" name="total_price" id="totalPrice" value="<?php echo $room['price']; ?>">
+                    <input type="hidden" name="price_per_night" value="<?php echo $room['price']; ?>">
 
                     <div class="form-group">
-                        <label for="check_in">Check-in Date</label>
-                        <input type="text" id="check_in" name="check_in" class="form-control" required>
+                        <label>Select Dates</label>
+                        <input type="text" name="dates" id="date-range" class="form-control" required>
                     </div>
 
-                    <div class="form-group">
-                        <label for="check_out">Check-out Date</label>
-                        <input type="text" id="check_out" name="check_out" class="form-control" required>
+                    <div class="booking-total">
+                        <div class="total-nights">Total nights: <span id="total-nights">0</span></div>
+                        <h3>Total: $<span id="total-price">0.00</span></h3>
+                        <input type="hidden" name="total_price" id="total-price-input" value="0">
                     </div>
 
-                    <div class="form-group">
-                        <label>Total Price</label>
-                        <div id="totalPriceDisplay">$<?php echo number_format($room['price'], 2); ?></div>
-                    </div>
-
-                    <button type="submit" class="btn">Book Now</button>
+                    <button type="submit" class="btn btn-primary">Confirm Booking</button>
                 </form>
-
-                <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-                <script>
-                    // Convert PHP array to JavaScript array
-                    const bookedDates = <?php echo json_encode($booked_dates); ?>;
-                    const pricePerNight = <?php echo $room['price']; ?>;
-
-                    // Initialize check-in date picker
-                    const checkInPicker = flatpickr("#check_in", {
-                        minDate: "today",
-                        disable: bookedDates,
-                        onChange: function(selectedDates) {
-                            // Update check-out date picker min date
-                            checkOutPicker.set('minDate', selectedDates[0].fp_incr(1));
-                            updateTotalPrice();
-                        }
-                    });
-
-                    // Initialize check-out date picker
-                    const checkOutPicker = flatpickr("#check_out", {
-                        minDate: new Date().fp_incr(1),
-                        disable: bookedDates,
-                        onChange: function() {
-                            updateTotalPrice();
-                        }
-                    });
-
-                    function updateTotalPrice() {
-                        const checkIn = checkInPicker.selectedDates[0];
-                        const checkOut = checkOutPicker.selectedDates[0];
-
-                        if (checkIn && checkOut && checkOut > checkIn) {
-                            const nights = Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24));
-                            const totalPrice = nights * pricePerNight;
-                            document.getElementById('totalPriceDisplay').textContent = '$' + totalPrice.toFixed(2);
-                            document.getElementById('totalPrice').value = totalPrice;
-                        }
-                    }
-                </script>
-            <?php else: ?>
-                <p>Room not found. <a href="rooms.php">View all rooms</a></p>
-            <?php endif; ?>
+            </div>
         </div>
     </main>
 
     <?php include 'includes/footer.php'; ?>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
+    <script>
+        const bookedDates = <?php echo $booked_dates_json; ?>;
+        const pricePerNight = <?php echo $room['price']; ?>;
+
+        $(document).ready(function() {
+            $('#date-range').daterangepicker({
+                opens: 'center',
+                minDate: moment(),
+                isInvalidDate: function(date) {
+                    const dateStr = date.format('YYYY-MM-DD');
+                    return bookedDates.includes(dateStr);
+                },
+                isCustomDate: function(date) {
+                    const dateStr = date.format('YYYY-MM-DD');
+                    if (bookedDates.includes(dateStr)) {
+                        return 'booked-date';
+                    }
+                }
+            }, function(start, end, label) {
+                // Calculate total nights and price
+                const nights = end.diff(start, 'days');
+                const totalPrice = nights * pricePerNight;
+                
+                $('#total-nights').text(nights);
+                $('#total-price').text(totalPrice.toFixed(2));
+                $('#total-price-input').val(totalPrice);
+            });
+        });
+    </script>
 </body>
 </html>

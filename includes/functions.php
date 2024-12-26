@@ -29,6 +29,9 @@ function initializeDatabase() {
         price DECIMAL(10,2) NOT NULL,
         description TEXT,
         image VARCHAR(255),
+        capacity INT,
+        size DECIMAL(5,2),
+        view_type VARCHAR(100),
         amenities JSON,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -135,16 +138,27 @@ function getRoomById($id) {
 
 function addRoom($data) {
     global $conn;
-    $sql = "INSERT INTO rooms (hotel_id, name, type, price, description, image, amenities) VALUES (?, ?, ?, ?, ?, ?, ?)";
+    $sql = "INSERT INTO rooms (hotel_id, name, type, price, description, image, capacity, size, view_type, amenities) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("issdsss", 
+    
+    // Convert amenities to JSON if it's not already
+    $amenities = isset($data['amenities']) ? $data['amenities'] : '[]';
+    if (is_array($amenities)) {
+        $amenities = json_encode($amenities);
+    }
+    
+    $stmt->bind_param("issdssiisd", 
         $data['hotel_id'],
         $data['name'],
         $data['type'],
         $data['price'],
         $data['description'],
         $data['image'],
-        $data['amenities']
+        $data['capacity'],
+        $data['size'],
+        $data['view_type'],
+        $amenities
     );
     return $stmt->execute();
 }
@@ -261,10 +275,29 @@ function deleteHotel($id) {
 // Booking functions
 function createBooking($roomId, $userId, $checkIn, $checkOut, $totalPrice) {
     global $conn;
-    $sql = "INSERT INTO bookings (room_id, user_id, check_in, check_out, total_price) VALUES (?, ?, ?, ?, ?)";
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param("iissd", $roomId, $userId, $checkIn, $checkOut, $totalPrice);
-    return $stmt->execute();
+    
+    // Start transaction
+    $conn->begin_transaction();
+    
+    try {
+        // Create the booking
+        $sql = "INSERT INTO bookings (room_id, user_id, check_in, check_out, total_price, status) 
+                VALUES (?, ?, ?, ?, ?, 'confirmed')";
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param("iissd", $roomId, $userId, $checkIn, $checkOut, $totalPrice);
+        $stmt->execute();
+        
+        $booking_id = $conn->insert_id;
+        
+        // Commit transaction
+        $conn->commit();
+        
+        return $booking_id;
+    } catch (Exception $e) {
+        // Rollback transaction on error
+        $conn->rollback();
+        return false;
+    }
 }
 
 function getBookingsByUser($userId) {
@@ -407,6 +440,8 @@ function getAdminDashboardStats() {
 // Get booked dates for a room
 function getBookedDates($roomId) {
     global $conn;
+    $dates = [];
+    
     $sql = "SELECT check_in, check_out 
             FROM bookings 
             WHERE room_id = ? 
@@ -415,7 +450,27 @@ function getBookedDates($roomId) {
     $stmt = $conn->prepare($sql);
     $stmt->bind_param("i", $roomId);
     $stmt->execute();
-    return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $result = $stmt->get_result();
+    
+    while ($booking = $result->fetch_assoc()) {
+        $current = new DateTime($booking['check_in']);
+        $end = new DateTime($booking['check_out']);
+        
+        while ($current < $end) {
+            $dates[] = $current->format('Y-m-d');
+            $current->modify('+1 day');
+        }
+    }
+    
+    return $dates;
+}
+
+function getUserById($id) {
+    global $conn;
+    $stmt = $conn->prepare("SELECT * FROM users WHERE id = ?");
+    $stmt->bind_param("i", $id);
+    $stmt->execute();
+    return $stmt->get_result()->fetch_assoc();
 }
 
 // Admin Management Functions

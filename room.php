@@ -8,8 +8,11 @@ if (!$room_id) {
     exit;
 }
 
-// Get room details
-$sql = "SELECT * FROM rooms WHERE id = ?";
+// Get room details with hotel information
+$sql = "SELECT r.*, h.name as hotel_name, h.city as hotel_city 
+        FROM rooms r 
+        LEFT JOIN hotels h ON r.hotel_id = h.id 
+        WHERE r.id = ?";
 $stmt = $conn->prepare($sql);
 $stmt->bind_param("i", $room_id);
 $stmt->execute();
@@ -19,6 +22,10 @@ if (!$room) {
     header('Location: rooms.php');
     exit;
 }
+
+// Get booked dates for this room
+$booked_dates = getBookedDates($room_id);
+$booked_dates_json = json_encode($booked_dates);
 
 // Get room reviews
 $sql = "SELECT r.*, u.name as user_name 
@@ -48,28 +55,6 @@ if (isset($_SESSION['user_id'])) {
     $user = $stmt->get_result()->fetch_assoc();
     $user_name = $user['name'];
 }
-
-// Handle booking submission
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_SESSION['user_id'])) {
-    $check_in = $_POST['check_in'] ?? '';
-    $check_out = $_POST['check_out'] ?? '';
-    $guests = $_POST['guests'] ?? '';
-
-    if ($check_in && $check_out && $guests) {
-        // Calculate total price based on number of days
-        $check_in_date = new DateTime($check_in);
-        $check_out_date = new DateTime($check_out);
-        $days = $check_out_date->diff($check_in_date)->days;
-        $total_price = $room['price'] * $days;
-
-        // Create booking with room_id first, then user_id
-        $booking_result = createBooking($room_id, $_SESSION['user_id'], $check_in, $check_out, $total_price);
-        if ($booking_result) {
-            header('Location: bookings.php');
-            exit;
-        }
-    }
-}
 ?>
 
 <!DOCTYPE html>
@@ -80,8 +65,44 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_SESSION['user_id'])) {
     <title><?php echo htmlspecialchars($room['name']); ?> - Hotelly</title>
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Montserrat:wght@300;400;500;600&display=swap" rel="stylesheet">
     <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
     <link rel="stylesheet" href="css/style.css">
-    <link rel="stylesheet" href="css/room.css">
+    <style>
+        .booking-calendar {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-top: 20px;
+        }
+        .daterangepicker {
+            font-family: 'Montserrat', sans-serif;
+        }
+        .daterangepicker td.active {
+            background-color: var(--primary-color) !important;
+        }
+        .booking-form {
+            margin-top: 20px;
+        }
+        .booking-total {
+            margin-top: 15px;
+            padding: 15px;
+            background: #f8f8f8;
+            border-radius: 4px;
+        }
+        .booking-total h3 {
+            margin: 0;
+            color: var(--primary-color);
+        }
+        .booked-date {
+            background-color: #ffebee !important;
+            color: #d32f2f !important;
+            text-decoration: line-through;
+        }
+        .room-details {
+            margin-top: 120px;
+        }
+    </style>
 </head>
 <body>
     <!-- Navigation -->
@@ -111,6 +132,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_SESSION['user_id'])) {
                 <div class="room-title">
                     <div class="room-type"><?php echo htmlspecialchars($room['type']); ?></div>
                     <h1 class="serif"><?php echo htmlspecialchars($room['name']); ?></h1>
+                    <p class="room-location"><?php echo htmlspecialchars($room['hotel_name']); ?> - <?php echo htmlspecialchars($room['hotel_city']); ?></p>
                     <?php if ($average_rating > 0): ?>
                         <div class="room-rating">
                             <span class="stars"><?php echo str_repeat('★', round($average_rating)); ?></span>
@@ -119,97 +141,87 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_SESSION['user_id'])) {
                     <?php endif; ?>
                 </div>
                 <div class="room-price">
-                    <span class="price">$<?php echo number_format($room['price'], 0); ?></span>
-                    <span class="per-night">/night</span>
+                    <span class="price">$<?php echo number_format($room['price'], 2); ?></span>
+                    <span class="per-night">per night</span>
                 </div>
             </div>
 
             <div class="room-gallery" data-aos="fade-up">
-                <img src="<?php echo htmlspecialchars($room['image']); ?>" alt="<?php echo htmlspecialchars($room['name']); ?>" class="main-image">
+                <img src="<?php echo htmlspecialchars($room['image']); ?>" alt="<?php echo htmlspecialchars($room['name']); ?>">
             </div>
 
-            <div class="room-content" data-aos="fade-up">
-                <div class="room-info">
-                    <h2 class="serif">Room Details</h2>
-                    <div class="room-features">
-                        <div class="feature">
-                            <span class="feature-label">Capacity</span>
-                            <span class="feature-value"><?php echo $room['capacity']; ?> Persons</span>
-                        </div>
-                        <div class="feature">
-                            <span class="feature-label">Size</span>
-                            <span class="feature-value"><?php echo $room['size']; ?>m²</span>
-                        </div>
-                        <div class="feature">
-                            <span class="feature-label">View</span>
-                            <span class="feature-value"><?php echo htmlspecialchars($room['view_type']); ?></span>
-                        </div>
-                    </div>
+            <div class="room-content">
+                <div class="room-info" data-aos="fade-up">
                     <div class="room-description">
+                        <h2 class="serif">Room Description</h2>
                         <p><?php echo nl2br(htmlspecialchars($room['description'])); ?></p>
                     </div>
-                    <?php if ($room['amenities']): ?>
-                        <div class="room-amenities">
-                            <h3>Amenities</h3>
-                            <ul>
-                                <?php foreach (json_decode($room['amenities'], true) as $amenity): ?>
-                                    <li><?php echo htmlspecialchars($amenity); ?></li>
-                                <?php endforeach; ?>
-                            </ul>
-                        </div>
-                    <?php endif; ?>
-                </div>
 
-                <div class="booking-form">
-                    <h2 class="serif">Book This Room</h2>
+                    <div class="room-features">
+                        <h2 class="serif">Room Features</h2>
+                        <ul>
+                            <li>Room Size: <?php echo htmlspecialchars($room['size']); ?> m²</li>
+                            <li>Capacity: <?php echo htmlspecialchars($room['capacity']); ?> guests</li>
+                            <li>View: <?php echo htmlspecialchars($room['view_type']); ?></li>
+                            <?php 
+                            $amenities = json_decode($room['amenities'], true);
+                            if ($amenities) {
+                                foreach ($amenities as $amenity) {
+                                    echo "<li>" . htmlspecialchars($amenity) . "</li>";
+                                }
+                            }
+                            ?>
+                        </ul>
+                    </div>
+
                     <?php if (isset($_SESSION['user_id'])): ?>
-                        <form method="POST" class="book-form">
+                    <div class="booking-calendar">
+                        <h2 class="serif">Book Your Stay</h2>
+                        <form class="booking-form" method="POST" action="process_booking.php">
+                            <input type="hidden" name="room_id" value="<?php echo $room_id; ?>">
+                            <input type="hidden" name="price_per_night" value="<?php echo $room['price']; ?>">
+                            
                             <div class="form-group">
-                                <label>Check In</label>
-                                <input type="date" name="check_in" required min="<?php echo date('Y-m-d'); ?>">
+                                <label>Select Dates</label>
+                                <input type="text" name="dates" id="date-range" class="form-control" required>
                             </div>
-                            <div class="form-group">
-                                <label>Check Out</label>
-                                <input type="date" name="check_out" required min="<?php echo date('Y-m-d', strtotime('+1 day')); ?>">
+
+                            <div class="booking-total">
+                                <div class="total-nights">Total nights: <span id="total-nights">0</span></div>
+                                <h3>Total: $<span id="total-price">0.00</span></h3>
                             </div>
-                            <div class="form-group">
-                                <label>Guests</label>
-                                <select name="guests" required>
-                                    <?php for ($i = 1; $i <= $room['capacity']; $i++): ?>
-                                        <option value="<?php echo $i; ?>"><?php echo $i; ?> Guest<?php echo $i > 1 ? 's' : ''; ?></option>
-                                    <?php endfor; ?>
-                                </select>
-                            </div>
-                            <button type="submit" class="btn btn-solid">Book Now</button>
+
+                            <button type="submit" class="btn btn-primary">Book Now</button>
                         </form>
+                    </div>
                     <?php else: ?>
+                    <div class="booking-calendar">
                         <p>Please <a href="login.php">login</a> to book this room.</p>
+                    </div>
                     <?php endif; ?>
                 </div>
             </div>
 
             <?php if ($reviews): ?>
-                <div class="room-reviews" data-aos="fade-up">
-                    <h2 class="serif">Guest Reviews</h2>
-                    <div class="reviews-grid">
-                        <?php foreach ($reviews as $review): ?>
-                            <div class="review-card">
-                                <div class="review-header">
-                                    <div class="reviewer-name"><?php echo htmlspecialchars($review['user_name']); ?></div>
-                                    <div class="review-rating">
-                                        <span class="stars"><?php echo str_repeat('★', $review['rating']); ?></span>
-                                    </div>
-                                </div>
-                                <div class="review-date">
-                                    <?php echo date('M d, Y', strtotime($review['created_at'])); ?>
-                                </div>
-                                <div class="review-comment">
-                                    <?php echo nl2br(htmlspecialchars($review['comment'])); ?>
+            <div class="room-reviews" data-aos="fade-up">
+                <h2 class="serif">Guest Reviews</h2>
+                <div class="reviews-grid">
+                    <?php foreach ($reviews as $review): ?>
+                        <div class="review-card">
+                            <div class="review-header">
+                                <div class="review-name"><?php echo htmlspecialchars($review['user_name']); ?></div>
+                                <div class="review-rating">
+                                    <?php for ($i = 1; $i <= 5; $i++): ?>
+                                        <span class="star <?php echo $i <= $review['rating'] ? 'filled' : ''; ?>">★</span>
+                                    <?php endfor; ?>
                                 </div>
                             </div>
-                        <?php endforeach; ?>
-                    </div>
+                            <div class="review-comment"><?php echo nl2br(htmlspecialchars($review['comment'])); ?></div>
+                            <div class="review-date"><?php echo date('M d, Y', strtotime($review['created_at'])); ?></div>
+                        </div>
+                    <?php endforeach; ?>
                 </div>
+            </div>
             <?php endif; ?>
         </div>
     </section>
@@ -246,18 +258,38 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_SESSION['user_id'])) {
     </footer>
 
     <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
     <script>
         AOS.init();
-        
-        // Validate check-in and check-out dates
-        document.querySelector('.book-form').addEventListener('submit', function(e) {
-            const checkIn = new Date(this.check_in.value);
-            const checkOut = new Date(this.check_out.value);
-            
-            if (checkIn >= checkOut) {
-                e.preventDefault();
-                alert('Check-out date must be after check-in date');
-            }
+
+        // Convert PHP array to JavaScript array
+        const bookedDates = <?php echo $booked_dates_json; ?>;
+        const pricePerNight = <?php echo $room['price']; ?>;
+
+        $(document).ready(function() {
+            $('#date-range').daterangepicker({
+                opens: 'center',
+                minDate: moment(),
+                isInvalidDate: function(date) {
+                    const dateStr = date.format('YYYY-MM-DD');
+                    return bookedDates.includes(dateStr);
+                },
+                isCustomDate: function(date) {
+                    const dateStr = date.format('YYYY-MM-DD');
+                    if (bookedDates.includes(dateStr)) {
+                        return 'booked-date';
+                    }
+                }
+            }, function(start, end, label) {
+                // Calculate total nights and price
+                const nights = end.diff(start, 'days');
+                const totalPrice = nights * pricePerNight;
+                
+                $('#total-nights').text(nights);
+                $('#total-price').text(totalPrice.toFixed(2));
+            });
         });
     </script>
 </body>
