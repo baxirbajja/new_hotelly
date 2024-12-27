@@ -177,7 +177,15 @@ if (isset($_SESSION['user_id'])) {
                     <?php if (isset($_SESSION['user_id'])): ?>
                     <div class="booking-calendar">
                         <h2 class="serif">Book Your Stay</h2>
-                        <form class="booking-form" method="POST" action="process_booking.php">
+                        <?php if (isset($_SESSION['error'])): ?>
+                            <div class="alert alert-error">
+                                <?php 
+                                echo htmlspecialchars($_SESSION['error']);
+                                unset($_SESSION['error']);
+                                ?>
+                            </div>
+                        <?php endif; ?>
+                        <form class="booking-form" method="POST" action="process_booking.php" onsubmit="return validateBooking()">
                             <input type="hidden" name="room_id" value="<?php echo $room_id; ?>">
                             <input type="hidden" name="price_per_night" value="<?php echo $room['price']; ?>">
                             
@@ -191,7 +199,7 @@ if (isset($_SESSION['user_id'])) {
                                 <h3>Total: $<span id="total-price">0.00</span></h3>
                             </div>
 
-                            <button type="submit" class="btn btn-primary">Book Now</button>
+                            <button type="submit" class="btn btn-primary" id="book-now-btn" disabled>Book Now</button>
                         </form>
                     </div>
                     <?php else: ?>
@@ -264,33 +272,71 @@ if (isset($_SESSION['user_id'])) {
     <script>
         AOS.init();
 
-        // Convert PHP array to JavaScript array
+        // Get booked dates from PHP
         const bookedDates = <?php echo $booked_dates_json; ?>;
-        const pricePerNight = <?php echo $room['price']; ?>;
+        let selectedStartDate = null;
+        let selectedEndDate = null;
 
-        $(document).ready(function() {
-            $('#date-range').daterangepicker({
-                opens: 'center',
-                minDate: moment(),
-                isInvalidDate: function(date) {
-                    const dateStr = date.format('YYYY-MM-DD');
-                    return bookedDates.includes(dateStr);
-                },
-                isCustomDate: function(date) {
-                    const dateStr = date.format('YYYY-MM-DD');
-                    if (bookedDates.includes(dateStr)) {
-                        return 'booked-date';
-                    }
-                }
-            }, function(start, end, label) {
-                // Calculate total nights and price
-                const nights = end.diff(start, 'days');
+        // Initialize date range picker
+        $('#date-range').daterangepicker({
+            minDate: moment(),
+            opens: 'center',
+            autoApply: true,
+            isInvalidDate: function(date) {
+                return bookedDates.includes(date.format('YYYY-MM-DD'));
+            }
+        }, function(start, end) {
+            selectedStartDate = start;
+            selectedEndDate = end;
+            updateBookingDetails();
+        });
+
+        // Clear initial dates
+        $('#date-range').val('');
+
+        function updateBookingDetails() {
+            if (selectedStartDate && selectedEndDate) {
+                const nights = selectedEndDate.diff(selectedStartDate, 'days');
+                const pricePerNight = <?php echo $room['price']; ?>;
                 const totalPrice = nights * pricePerNight;
-                
+
                 $('#total-nights').text(nights);
                 $('#total-price').text(totalPrice.toFixed(2));
-            });
-        });
+                $('#book-now-btn').prop('disabled', false);
+            } else {
+                $('#total-nights').text('0');
+                $('#total-price').text('0.00');
+                $('#book-now-btn').prop('disabled', true);
+            }
+        }
+
+        function validateBooking() {
+            if (!selectedStartDate || !selectedEndDate) {
+                alert('Please select your check-in and check-out dates');
+                return false;
+            }
+
+            const nights = selectedEndDate.diff(selectedStartDate, 'days');
+            if (nights < 1) {
+                alert('Please select at least one night');
+                return false;
+            }
+
+            // Check if any selected date is in booked dates
+            let currentDate = moment(selectedStartDate);
+            while (currentDate < selectedEndDate) {
+                if (bookedDates.includes(currentDate.format('YYYY-MM-DD'))) {
+                    alert('Some of your selected dates are not available');
+                    return false;
+                }
+                currentDate.add(1, 'days');
+            }
+
+            return true;
+        }
+
+        // Reset dates when the page loads
+        updateBookingDetails();
     </script>
 </body>
 </html>

@@ -111,7 +111,6 @@ $bookings = getAllBookings();
             <a href="rooms.php" class="nav-link">Rooms</a>
             <a href="bookings.php" class="nav-link active">Bookings</a>
             <a href="users.php" class="nav-link">Users</a>
-            <a href="reviews.php" class="nav-link">Reviews</a>
             <a href="../includes/logout.php" class="nav-link">Logout</a>
         </div>
     </nav>

@@ -3,66 +3,98 @@ require_once '../includes/functions.php';
 session_start();
 
 // Check if user is logged in and is admin
-if (!isset($_SESSION['user_id']) || !isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'admin') {
+if (!isset($_SESSION['user_id']) || !isAdmin($_SESSION['user_id'])) {
     header('Location: ../login.php');
     exit;
 }
 
-// Handle form submissions
+// Get all rooms and hotels
+$rooms = getAllRooms();
+$hotels = getAllHotels();
+
+// Debug output
+echo "<!-- Debug: Found " . count($rooms) . " rooms -->\n";
+foreach ($rooms as $room) {
+    echo "<!-- Debug: Room " . htmlspecialchars($room['name']) . " (ID: " . $room['id'] . ") -->\n";
+}
+
+// Function to get hotel name
+function getHotelName($hotel_id) {
+    global $hotels;
+    foreach ($hotels as $hotel) {
+        if ($hotel['id'] == $hotel_id) {
+            return $hotel['name'];
+        }
+    }
+    return 'Unknown Hotel';
+}
+
+// Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['action'])) {
         switch ($_POST['action']) {
             case 'add':
-                $data = [
+                $room_data = [
+                    'hotel_id' => $_POST['hotel_id'],
                     'name' => $_POST['name'],
                     'type' => $_POST['type'],
-                    'description' => $_POST['description'],
                     'price' => $_POST['price'],
+                    'description' => $_POST['description'],
                     'capacity' => $_POST['capacity'],
                     'size' => $_POST['size'],
                     'view_type' => $_POST['view_type'],
-                    'amenities' => json_encode(explode(',', $_POST['amenities'])),
-                    'hotel_id' => $_POST['hotel_id']
+                    'amenities' => json_encode(explode(',', $_POST['amenities']))
                 ];
 
-                if ($_POST['image_type'] === 'url') {
-                    $data['image'] = $_POST['image_url'];
-                } else {
-                    $image = $_FILES['image_upload'];
-                    $data['image'] = uploadImage($image);
+                // Handle image upload
+                if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
+                    $upload_dir = '../uploads/';
+                    $file_extension = pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION);
+                    $file_name = uniqid() . '.' . $file_extension;
+                    $target_file = $upload_dir . $file_name;
+
+                    if (move_uploaded_file($_FILES['image']['tmp_name'], $target_file)) {
+                        $room_data['image'] = '../uploads/' . $file_name;
+                    }
                 }
 
-                if (addRoom($data)) {
+                if (addRoom($room_data)) {
                     $_SESSION['success'] = "Room added successfully!";
                 } else {
-                    $_SESSION['error'] = "Error adding room.";
+                    $_SESSION['error'] = "Failed to add room.";
                 }
                 break;
 
             case 'edit':
-                $data = [
+                $room_data = [
+                    'id' => $_POST['room_id'],
+                    'hotel_id' => $_POST['hotel_id'],
                     'name' => $_POST['name'],
                     'type' => $_POST['type'],
-                    'description' => $_POST['description'],
                     'price' => $_POST['price'],
+                    'description' => $_POST['description'],
                     'capacity' => $_POST['capacity'],
                     'size' => $_POST['size'],
                     'view_type' => $_POST['view_type'],
-                    'amenities' => json_encode(explode(',', $_POST['amenities'])),
-                    'hotel_id' => $_POST['hotel_id']
+                    'amenities' => json_encode(explode(',', $_POST['amenities']))
                 ];
 
-                if ($_POST['image_type'] === 'url') {
-                    $data['image'] = $_POST['image_url'];
-                } else {
-                    $image = $_FILES['image_upload'];
-                    $data['image'] = uploadImage($image);
+                // Handle image upload
+                if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
+                    $upload_dir = '../uploads/';
+                    $file_extension = pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION);
+                    $file_name = uniqid() . '.' . $file_extension;
+                    $target_file = $upload_dir . $file_name;
+
+                    if (move_uploaded_file($_FILES['image']['tmp_name'], $target_file)) {
+                        $room_data['image'] = '../uploads/' . $file_name;
+                    }
                 }
 
-                if (updateRoom($_POST['room_id'], $data)) {
+                if (updateRoom($room_data)) {
                     $_SESSION['success'] = "Room updated successfully!";
                 } else {
-                    $_SESSION['error'] = "Error updating room.";
+                    $_SESSION['error'] = "Failed to update room.";
                 }
                 break;
 
@@ -70,7 +102,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (deleteRoom($_POST['room_id'])) {
                     $_SESSION['success'] = "Room deleted successfully!";
                 } else {
-                    $_SESSION['error'] = "Cannot delete room with existing bookings.";
+                    $_SESSION['error'] = "Failed to delete room.";
                 }
                 break;
         }
@@ -79,9 +111,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Get all rooms
-$rooms = getAllRooms();
-$hotels = getAllHotels();
+// Get room types
+$room_types = ['Standard', 'Deluxe', 'Suite', 'Family'];
 ?>
 
 <!DOCTYPE html>
@@ -148,80 +179,55 @@ $hotels = getAllHotels();
             max-width: 1400px;
             margin: 0 auto;
         }
-        .modal {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            display: none;
-            overflow-y: auto;
-            z-index: 1000;
+        .admin-title {
+            margin-bottom: 2rem;
+            color: var(--secondary-color);
+            font-family: 'Playfair Display', serif;
         }
-        .modal-content {
+        .admin-table {
+            width: 100%;
+            border-collapse: collapse;
             background: #fff;
-            width: 90%;
-            max-width: 600px;
-            margin: 20px auto;
-            padding: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
             border-radius: 8px;
-            position: relative;
-            max-height: calc(100vh - 40px);
-            overflow-y: auto;
+            overflow: hidden;
         }
-        .form-group {
-            margin-bottom: 15px;
-        }
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: 500;
-        }
-        .form-group input,
-        .form-group textarea,
-        .form-group select {
-            width: 100%;
-            padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-        }
-        .form-group textarea {
-            min-height: 100px;
-        }
-        .form-buttons {
-            margin-top: 20px;
-            display: flex;
-            gap: 10px;
-            justify-content: flex-end;
-        }
-        .admin-table-image {
-            width: 100px;
-            height: 60px;
-            object-fit: cover;
-            border-radius: 4px;
-        }
-        .admin-table th {
-            background: var(--secondary-color);
-            color: white;
-            padding: 12px;
-            text-align: left;
-        }
+        .admin-table th,
         .admin-table td {
-            padding: 12px;
+            padding: 1rem;
+            text-align: left;
             border-bottom: 1px solid #eee;
         }
+        .admin-table th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: var(--secondary-color);
+        }
+        .admin-table tr:hover {
+            background: #f8f9fa;
+        }
+        .room-thumbnail {
+            width: 100px;
+            height: 70px;
+            object-fit: cover;
+            border-radius: 4px;
+            transition: transform 0.2s;
+        }
         .admin-btn {
-            padding: 8px 16px;
+            padding: 0.5rem 1rem;
             border: none;
             border-radius: 4px;
             cursor: pointer;
-            font-weight: 500;
+            font-family: 'Montserrat', sans-serif;
+            font-size: 0.9rem;
             transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+            margin: 0 0.25rem;
         }
         .admin-btn-primary {
             background: var(--primary-color);
-            color: var(--secondary-color);
+            color: white;
         }
         .admin-btn-danger {
             background: #dc3545;
@@ -229,28 +235,12 @@ $hotels = getAllHotels();
         }
         .admin-btn:hover {
             opacity: 0.9;
-        }
-        .admin-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            padding: 20px;
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .table-responsive {
-            overflow-x: auto;
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            padding: 20px;
+            transform: translateY(-1px);
         }
         .alert {
-            padding: 12px;
+            padding: 1rem;
+            margin-bottom: 1rem;
             border-radius: 4px;
-            margin-bottom: 20px;
         }
         .alert-success {
             background: #d4edda;
@@ -262,24 +252,77 @@ $hotels = getAllHotels();
             color: #721c24;
             border: 1px solid #f5c6cb;
         }
-        .image-input-group {
-            border: 1px solid #ddd;
-            padding: 15px;
-            border-radius: 4px;
-        }
-        .input-option {
-            margin-bottom: 10px;
-        }
-        .input-option:last-child {
-            margin-bottom: 0;
-        }
-        .image-input {
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1050;
+            left: 0;
+            top: 0;
             width: 100%;
-            margin-top: 5px;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.5);
         }
-        .input-option label {
-            margin-left: 5px;
-            display: inline-block;
+
+        .modal-content {
+            background-color: #fff;
+            margin: 2rem auto;
+            padding: 2rem;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 85vh;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        .modal-content form {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: var(--secondary-color);
+        }
+
+        .form-group input[type="text"],
+        .form-group input[type="number"],
+        .form-group input[type="url"],
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 1rem;
+            font-family: 'Montserrat', sans-serif;
+        }
+
+        .form-group textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        .form-buttons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .room-thumbnail {
+            width: 100px;
+            height: 60px;
+            object-fit: cover;
+            border-radius: 4px;
         }
     </style>
 </head>
@@ -295,15 +338,14 @@ $hotels = getAllHotels();
             <a href="rooms.php" class="nav-link active">Rooms</a>
             <a href="bookings.php" class="nav-link">Bookings</a>
             <a href="users.php" class="nav-link">Users</a>
-            <a href="reviews.php" class="nav-link">Reviews</a>
-            <a href="../includes/logout.php" class="nav-link">Logout</a>
+            <a href="../logout.php" class="nav-link">Logout</a>
         </div>
     </nav>
 
     <div class="admin-container">
         <div class="admin-header">
             <h1 class="admin-title">Room Management</h1>
-            <button class="admin-btn admin-btn-primary" onclick="showAddRoomModal()">Add New Room</button>
+            <button class="admin-btn admin-btn-primary" onclick="document.getElementById('addRoomModal').style.display='block'">Add New Room</button>
         </div>
 
         <?php if (isset($_SESSION['success'])): ?>
@@ -325,28 +367,28 @@ $hotels = getAllHotels();
                     <tr>
                         <th>Image</th>
                         <th>Name</th>
+                        <th>Hotel</th>
                         <th>Type</th>
                         <th>Price</th>
                         <th>Capacity</th>
-                        <th>Size</th>
-                        <th>View</th>
-                        <th>Hotel</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     <?php foreach ($rooms as $room): ?>
                         <tr>
-                            <td><img src="<?php echo htmlspecialchars($room['image']); ?>" alt="<?php echo htmlspecialchars($room['name']); ?>" class="admin-table-image"></td>
+                            <td>
+                                <img src="<?php echo htmlspecialchars($room['image'] ? '../' . ltrim($room['image'], '../') : '../uploads/default-room.jpg'); ?>" 
+                                     alt="<?php echo htmlspecialchars($room['name']); ?>" 
+                                     class="room-thumbnail">
+                            </td>
                             <td><?php echo htmlspecialchars($room['name']); ?></td>
+                            <td><?php echo htmlspecialchars(getHotelName($room['hotel_id'])); ?></td>
                             <td><?php echo htmlspecialchars($room['type']); ?></td>
                             <td>$<?php echo number_format($room['price'], 2); ?></td>
-                            <td><?php echo htmlspecialchars($room['capacity']); ?> guests</td>
-                            <td><?php echo htmlspecialchars($room['size']); ?> m²</td>
-                            <td><?php echo htmlspecialchars($room['view_type']); ?></td>
-                            <td><?php echo htmlspecialchars($room['hotel_name']); ?> - <?php echo htmlspecialchars($room['hotel_city']); ?></td>
+                            <td><?php echo $room['capacity']; ?> persons</td>
                             <td>
-                                <button class="admin-btn admin-btn-primary" onclick="showEditRoomModal(<?php echo htmlspecialchars(json_encode($room)); ?>)">Edit</button>
+                                <button class="admin-btn admin-btn-primary" onclick='editRoom(<?php echo htmlspecialchars(json_encode($room)); ?>)'>Edit</button>
                                 <form method="POST" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this room?');">
                                     <input type="hidden" name="action" value="delete">
                                     <input type="hidden" name="room_id" value="<?php echo $room['id']; ?>">
@@ -364,148 +406,72 @@ $hotels = getAllHotels();
     <div id="addRoomModal" class="modal">
         <div class="modal-content">
             <h2>Add New Room</h2>
-            <form method="POST" class="admin-form" enctype="multipart/form-data">
+            <form method="POST" enctype="multipart/form-data">
                 <input type="hidden" name="action" value="add">
-
-                <div class="form-group">
-                    <label>Room Name</label>
-                    <input type="text" name="name" required>
-                </div>
-
+                
                 <div class="form-group">
                     <label>Hotel</label>
-                    <select name="hotel_id" required>
+                    <select name="hotel_id" class="form-control" required>
                         <?php foreach ($hotels as $hotel): ?>
-                            <option value="<?php echo $hotel['id']; ?>"><?php echo htmlspecialchars($hotel['name']); ?> - <?php echo htmlspecialchars($hotel['city']); ?></option>
+                            <option value="<?php echo $hotel['id']; ?>">
+                                <?php echo htmlspecialchars($hotel['name']); ?>
+                            </option>
                         <?php endforeach; ?>
                     </select>
                 </div>
 
                 <div class="form-group">
-                    <label>Description</label>
-                    <textarea name="description" required></textarea>
+                    <label>Room Name</label>
+                    <input type="text" name="name" class="form-control" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Room Type</label>
+                    <select name="type" class="form-control" required>
+                        <?php foreach ($room_types as $type): ?>
+                            <option value="<?php echo $type; ?>"><?php echo $type; ?></option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
 
                 <div class="form-group">
                     <label>Price per Night</label>
-                    <input type="number" name="price" min="0" step="0.01" required>
+                    <input type="number" name="price" class="form-control" required>
                 </div>
 
                 <div class="form-group">
-                    <label>Image</label>
-                    <div class="image-input-group">
-                        <div class="input-option">
-                            <input type="radio" name="image_type" value="url" id="url_option" checked>
-                            <label for="url_option">Image URL</label>
-                            <input type="url" name="image_url" class="image-input" placeholder="Enter image URL">
-                        </div>
-                        <div class="input-option">
-                            <input type="radio" name="image_type" value="upload" id="upload_option">
-                            <label for="upload_option">Upload Image</label>
-                            <input type="file" name="image_upload" class="image-input" accept="image/*">
-                        </div>
-                    </div>
+                    <label>Description</label>
+                    <textarea name="description" class="form-control" required></textarea>
                 </div>
 
                 <div class="form-group">
-                    <label>Capacity</label>
-                    <input type="number" name="capacity" min="1" required>
+                    <label>Capacity (persons)</label>
+                    <input type="number" name="capacity" class="form-control" required>
                 </div>
 
                 <div class="form-group">
-                    <label>Size</label>
-                    <input type="number" name="size" required>
+                    <label>Size (m²)</label>
+                    <input type="number" name="size" class="form-control" required>
                 </div>
 
                 <div class="form-group">
                     <label>View Type</label>
-                    <input type="text" name="view_type" required>
+                    <input type="text" name="view_type" class="form-control" required>
                 </div>
 
                 <div class="form-group">
                     <label>Amenities (comma-separated)</label>
-                    <input type="text" name="amenities" required>
+                    <input type="text" name="amenities" class="form-control" required>
                 </div>
 
-                <div class="form-buttons">
-                    <button type="button" class="admin-btn" onclick="hideAddRoomModal()">Cancel</button>
+                <div class="form-group">
+                    <label>Room Image</label>
+                    <input type="file" name="image" accept="image/*" class="form-control" required>
+                </div>
+
+                <div class="form-actions">
                     <button type="submit" class="admin-btn admin-btn-primary">Add Room</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Edit Room Modal -->
-    <div id="editRoomModal" class="modal">
-        <div class="modal-content">
-            <h2>Edit Room</h2>
-            <form method="POST" class="admin-form" enctype="multipart/form-data">
-                <input type="hidden" name="action" value="edit">
-                <input type="hidden" name="room_id" id="edit_room_id">
-
-                <div class="form-group">
-                    <label>Room Name</label>
-                    <input type="text" id="edit_name" name="name" required>
-                </div>
-
-                <div class="form-group">
-                    <label>Hotel</label>
-                    <select id="edit_hotel" name="hotel_id" required>
-                        <?php foreach ($hotels as $hotel): ?>
-                            <option value="<?php echo $hotel['id']; ?>"><?php echo htmlspecialchars($hotel['name']); ?> - <?php echo htmlspecialchars($hotel['city']); ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label>Description</label>
-                    <textarea id="edit_description" name="description" required></textarea>
-                </div>
-
-                <div class="form-group">
-                    <label>Price per Night</label>
-                    <input type="number" id="edit_price" name="price" min="0" step="0.01" required>
-                </div>
-
-                <div class="form-group">
-                    <label>Image</label>
-                    <div class="image-input-group">
-                        <div class="input-option">
-                            <input type="radio" name="image_type" value="url" id="edit_url_option" checked>
-                            <label for="edit_url_option">Image URL</label>
-                            <input type="url" id="edit_image_url" name="image_url" class="image-input" placeholder="Enter image URL">
-                        </div>
-                        <div class="input-option">
-                            <input type="radio" name="image_type" value="upload" id="edit_upload_option">
-                            <label for="edit_upload_option">Upload Image</label>
-                            <input type="file" id="edit_image_upload" name="image_upload" class="image-input" accept="image/*">
-                        </div>
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label>Capacity</label>
-                    <input type="number" id="edit_capacity" name="capacity" min="1" required>
-                </div>
-
-                <div class="form-group">
-                    <label>Size</label>
-                    <input type="number" id="edit_size" name="size" required>
-                </div>
-
-                <div class="form-group">
-                    <label>View Type</label>
-                    <input type="text" id="edit_view_type" name="view_type" required>
-                </div>
-
-                <div class="form-group">
-                    <label>Amenities (comma-separated)</label>
-                    <input type="text" id="edit_amenities" name="amenities" required>
-                </div>
-
-                <div class="form-buttons">
-                    <button type="button" class="admin-btn" onclick="hideEditRoomModal()">Cancel</button>
-                    <button type="submit" class="admin-btn admin-btn-primary">Update Room</button>
+                    <button type="button" class="admin-btn" onclick="document.getElementById('addRoomModal').style.display='none'">Cancel</button>
                 </div>
             </form>
         </div>
@@ -515,83 +481,92 @@ $hotels = getAllHotels();
     <script>
         AOS.init();
 
-        // Modal functions
-        function showAddRoomModal() {
-            document.getElementById('addRoomModal').style.display = 'block';
+        function editRoom(room) {
+            const modal = document.createElement('div');
+            modal.className = 'modal';
+            modal.style.display = 'block';
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <h2>Edit Room</h2>
+                    <form method="POST" enctype="multipart/form-data">
+                        <input type="hidden" name="action" value="edit">
+                        <input type="hidden" name="room_id" value="${room.id}">
+                        
+                        <div class="form-group">
+                            <label>Hotel</label>
+                            <select name="hotel_id" class="form-control" required>
+                                ${Array.from(document.querySelector('select[name="hotel_id"]').options)
+                                    .map(opt => `<option value="${opt.value}" ${opt.value == room.hotel_id ? 'selected' : ''}>${opt.text}</option>`)
+                                    .join('')}
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Room Name</label>
+                            <input type="text" name="name" class="form-control" value="${room.name}" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Room Type</label>
+                            <select name="type" class="form-control" required>
+                                ${Array.from(document.querySelector('select[name="type"]').options)
+                                    .map(opt => `<option value="${opt.value}" ${opt.value === room.type ? 'selected' : ''}>${opt.text}</option>`)
+                                    .join('')}
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Price per Night</label>
+                            <input type="number" name="price" class="form-control" value="${room.price}" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Description</label>
+                            <textarea name="description" class="form-control" required>${room.description}</textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Capacity (persons)</label>
+                            <input type="number" name="capacity" class="form-control" value="${room.capacity}" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Size (m²)</label>
+                            <input type="number" name="size" class="form-control" value="${room.size}" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label>View Type</label>
+                            <input type="text" name="view_type" class="form-control" value="${room.view_type}" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Amenities (comma-separated)</label>
+                            <input type="text" name="amenities" class="form-control" value="${JSON.parse(room.amenities).join(',')}" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Room Image</label>
+                            <input type="file" name="image" accept="image/*" class="form-control">
+                            <small>Leave empty to keep current image</small>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="submit" class="admin-btn admin-btn-primary">Update Room</button>
+                            <button type="button" class="admin-btn" onclick="this.closest('.modal').remove()">Cancel</button>
+                        </div>
+                    </form>
+                </div>
+            `;
+            document.body.appendChild(modal);
         }
 
-        function hideAddRoomModal() {
-            document.getElementById('addRoomModal').style.display = 'none';
-        }
-
-        function showEditRoomModal(room) {
-            document.getElementById('edit_room_id').value = room.id;
-            document.getElementById('edit_name').value = room.name;
-            document.getElementById('edit_hotel').value = room.hotel_id;
-            document.getElementById('edit_description').value = room.description;
-            document.getElementById('edit_price').value = room.price;
-            document.getElementById('edit_capacity').value = room.capacity;
-            document.getElementById('edit_size').value = room.size;
-            document.getElementById('edit_view_type').value = room.view_type;
-            document.getElementById('edit_amenities').value = JSON.parse(room.amenities).join(',');
-            document.getElementById('edit_image_url').value = room.image;
-            
-            document.getElementById('editRoomModal').style.display = 'block';
-        }
-
-        function hideEditRoomModal() {
-            document.getElementById('editRoomModal').style.display = 'none';
-        }
-
-        // Close modals when clicking outside
+        // Close modal when clicking outside
         window.onclick = function(event) {
             if (event.target.className === 'modal') {
                 event.target.style.display = 'none';
             }
         }
-
-        // Add this to your existing JavaScript
-        document.querySelectorAll('input[name="image_type"]').forEach(radio => {
-            radio.addEventListener('change', function() {
-                const urlInput = document.querySelector('input[name="image_url"]');
-                const fileInput = document.querySelector('input[name="image_upload"]');
-                
-                if (this.value === 'url') {
-                    urlInput.required = true;
-                    fileInput.required = false;
-                    urlInput.style.display = 'block';
-                    fileInput.style.display = 'none';
-                } else {
-                    urlInput.required = false;
-                    fileInput.required = true;
-                    urlInput.style.display = 'none';
-                    fileInput.style.display = 'block';
-                }
-            });
-        });
-
-        document.querySelectorAll('input[name="image_type"]').forEach(radio => {
-            radio.addEventListener('change', function() {
-                const urlInput = document.querySelector('input[name="image_url"]');
-                const fileInput = document.querySelector('input[name="image_upload"]');
-                
-                if (this.value === 'url') {
-                    urlInput.required = true;
-                    fileInput.required = false;
-                    urlInput.style.display = 'block';
-                    fileInput.style.display = 'none';
-                } else {
-                    urlInput.required = false;
-                    fileInput.required = true;
-                    urlInput.style.display = 'none';
-                    fileInput.style.display = 'block';
-                }
-            });
-        });
-
-        // Trigger change event on page load to set initial state
-        document.querySelector('input[name="image_type"]:checked').dispatchEvent(new Event('change'));
-        document.querySelector('input[name="image_type"]:checked').dispatchEvent(new Event('change'));
     </script>
 </body>
 </html>

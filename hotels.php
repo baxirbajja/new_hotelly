@@ -92,7 +92,7 @@ $cities = $cities_result->fetch_all(MYSQLI_ASSOC);
                                 ?>
                             </div>
                             <div class="room-bottom">
-                                <p class="room-rating">Rating: <?php echo number_format($hotel['rating'], 1); ?> ★</p>
+                                <p class="room-rating">Rating: <?php echo number_format(isset($hotel['average_rating']) ? $hotel['average_rating'] : 0, 1); ?> ★</p>
                                 <a href="hotel.php?id=<?php echo $hotel['id']; ?>" class="btn-text">View Details</a>
                             </div>
                         </div>

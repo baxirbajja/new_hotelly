@@ -5,27 +5,35 @@ require_once 'config.php';
 function initializeDatabase() {
     global $conn;
     
-    // Create hotels table if it doesn't exist
-    $sql = "CREATE TABLE IF NOT EXISTS hotels (
-        id INT PRIMARY KEY AUTO_INCREMENT,
-        name VARCHAR(255) NOT NULL,
-        city VARCHAR(100) NOT NULL,
-        address TEXT NOT NULL,
+    // Create users table
+    $conn->query("CREATE TABLE IF NOT EXISTS users (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        email VARCHAR(100) NOT NULL UNIQUE,
+        password VARCHAR(255) NOT NULL,
+        role ENUM('admin', 'user') DEFAULT 'user',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )");
+
+    // Create hotels table
+    $conn->query("CREATE TABLE IF NOT EXISTS hotels (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
         description TEXT,
+        city VARCHAR(100),
+        address TEXT,
         image VARCHAR(255),
-        rating DECIMAL(2,1) DEFAULT 0,
         amenities JSON,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-    )";
-    $conn->query($sql);
+    )");
 
-    // Create rooms table if it doesn't exist
-    $sql = "CREATE TABLE IF NOT EXISTS rooms (
-        id INT PRIMARY KEY AUTO_INCREMENT,
-        hotel_id INT,
-        name VARCHAR(255) NOT NULL,
-        type VARCHAR(100) NOT NULL,
+    // Create rooms table
+    $conn->query("CREATE TABLE IF NOT EXISTS rooms (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        hotel_id INT NOT NULL,
+        name VARCHAR(100) NOT NULL,
+        type VARCHAR(50) NOT NULL,
         price DECIMAL(10,2) NOT NULL,
         description TEXT,
         image VARCHAR(255),
@@ -36,50 +44,50 @@ function initializeDatabase() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         FOREIGN KEY (hotel_id) REFERENCES hotels(id) ON DELETE CASCADE
-    )";
-    $conn->query($sql);
+    )");
 
-    // Create users table if it doesn't exist
-    $sql = "CREATE TABLE IF NOT EXISTS users (
-        id INT PRIMARY KEY AUTO_INCREMENT,
-        name VARCHAR(255) NOT NULL,
-        email VARCHAR(255) NOT NULL UNIQUE,
-        password VARCHAR(255) NOT NULL,
-        role ENUM('user', 'admin') NOT NULL DEFAULT 'user',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )";
-    $conn->query($sql);
-
-    // Create bookings table if it doesn't exist
-    $sql = "CREATE TABLE IF NOT EXISTS bookings (
-        id INT PRIMARY KEY AUTO_INCREMENT,
-        room_id INT,
-        user_id INT,
+    // Create bookings table with payment_status
+    $conn->query("CREATE TABLE IF NOT EXISTS bookings (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        room_id INT NOT NULL,
+        user_id INT NOT NULL,
         check_in DATE NOT NULL,
         check_out DATE NOT NULL,
         total_price DECIMAL(10,2) NOT NULL,
-        status ENUM('pending', 'confirmed', 'cancelled', 'completed') NOT NULL DEFAULT 'pending',
+        status VARCHAR(20) DEFAULT 'pending',
+        payment_id VARCHAR(100) DEFAULT NULL,
+        payment_method VARCHAR(50) DEFAULT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE SET NULL,
+        FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-    )";
-    $conn->query($sql);
+    )");
 
-    // Create reviews table if it doesn't exist
-    $sql = "CREATE TABLE IF NOT EXISTS reviews (
-        id INT PRIMARY KEY AUTO_INCREMENT,
-        booking_id INT,
-        user_id INT,
-        room_id INT,
+    // Create reviews table
+    $conn->query("CREATE TABLE IF NOT EXISTS reviews (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        booking_id INT NOT NULL,
+        user_id INT NOT NULL,
+        room_id INT NOT NULL,
         rating INT NOT NULL,
         comment TEXT,
-        status ENUM('pending', 'approved', 'hidden') NOT NULL DEFAULT 'pending',
+        status ENUM('pending', 'approved', 'rejected') DEFAULT 'pending',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE SET NULL,
+        FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
         FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE
-    )";
-    $conn->query($sql);
+    )");
+
+    // Create payments table
+    $conn->query("CREATE TABLE IF NOT EXISTS payments (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        booking_id INT NOT NULL,
+        amount DECIMAL(10,2) NOT NULL,
+        payment_method VARCHAR(50) NOT NULL,
+        status ENUM('pending', 'completed', 'failed') DEFAULT 'pending',
+        transaction_id VARCHAR(100),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE
+    )");
 }
 
 // Call initialization
@@ -96,29 +104,62 @@ function fixImagePath($path) {
 // Room functions
 function getAllRooms($limit = null) {
     global $conn;
+    
+    // Debug: Check connection
+    if ($conn->connect_error) {
+        error_log("Database connection error in getAllRooms: " . $conn->connect_error);
+        return [];
+    }
+    
     $sql = "SELECT r.*, h.name as hotel_name, h.city as hotel_city 
             FROM rooms r 
             LEFT JOIN hotels h ON r.hotel_id = h.id 
             ORDER BY r.created_at DESC";
+            
     if ($limit) {
         $sql .= " LIMIT ?";
     }
-    $stmt = $conn->prepare($sql);
-    if ($limit) {
-        $stmt->bind_param("i", $limit);
-    }
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $rooms = $result->fetch_all(MYSQLI_ASSOC);
     
-    // Fix image paths
-    foreach ($rooms as &$room) {
-        if (isset($room['image'])) {
-            $room['image'] = fixImagePath($room['image']);
+    try {
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            error_log("Prepare statement failed in getAllRooms: " . $conn->error);
+            return [];
         }
+        
+        if ($limit) {
+            $stmt->bind_param("i", $limit);
+        }
+        
+        if (!$stmt->execute()) {
+            error_log("Execute failed in getAllRooms: " . $stmt->error);
+            return [];
+        }
+        
+        $result = $stmt->get_result();
+        if (!$result) {
+            error_log("Get result failed in getAllRooms: " . $stmt->error);
+            return [];
+        }
+        
+        $rooms = $result->fetch_all(MYSQLI_ASSOC);
+        
+        // Debug: Log room count
+        error_log("Found " . count($rooms) . " rooms in getAllRooms");
+        
+        // Fix image paths
+        foreach ($rooms as &$room) {
+            if (isset($room['image'])) {
+                $room['image'] = fixImagePath($room['image']);
+                error_log("Room image path: " . $room['image']);
+            }
+        }
+        
+        return $rooms;
+    } catch (Exception $e) {
+        error_log("Exception in getAllRooms: " . $e->getMessage());
+        return [];
     }
-    
-    return $rooms;
 }
 
 function getRoomById($id) {
@@ -194,16 +235,21 @@ function deleteRoom($id) {
 // Hotel Management functions
 function getAllHotels($limit = null) {
     global $conn;
-    $sql = "SELECT id, name, city, image, rating FROM hotels ORDER BY created_at DESC";
+    
+    // Get hotels with their average rating from reviews
+    $sql = "SELECT h.*, 
+            COALESCE(AVG(r.rating), 0) as average_rating,
+            COUNT(DISTINCT r.id) as review_count
+            FROM hotels h
+            LEFT JOIN rooms rm ON h.id = rm.hotel_id
+            LEFT JOIN reviews r ON rm.id = r.room_id AND r.status = 'approved'
+            GROUP BY h.id
+            ORDER BY h.name";
+            
     if ($limit) {
-        $sql .= " LIMIT ?";
+        $sql .= " LIMIT " . (int)$limit;
     }
-    $stmt = $conn->prepare($sql);
-    if ($limit) {
-        $stmt->bind_param("i", $limit);
-    }
-    $stmt->execute();
-    $result = $stmt->get_result();
+    $result = $conn->query($sql);
     $hotels = $result->fetch_all(MYSQLI_ASSOC);
     
     // Fix image paths
@@ -218,7 +264,15 @@ function getAllHotels($limit = null) {
 
 function getHotelById($id) {
     global $conn;
-    $stmt = $conn->prepare("SELECT * FROM hotels WHERE id = ?");
+    $sql = "SELECT h.*, 
+            COALESCE(AVG(r.rating), 0) as average_rating,
+            COUNT(DISTINCT r.id) as review_count
+            FROM hotels h
+            LEFT JOIN rooms rm ON h.id = rm.hotel_id
+            LEFT JOIN reviews r ON rm.id = r.room_id AND r.status = 'approved'
+            WHERE h.id = ?
+            GROUP BY h.id";
+    $stmt = $conn->prepare($sql);
     $stmt->bind_param("i", $id);
     $stmt->execute();
     $hotel = $stmt->get_result()->fetch_assoc();
@@ -273,73 +327,93 @@ function deleteHotel($id) {
 }
 
 // Booking functions
-function createBooking($roomId, $userId, $checkIn, $checkOut, $totalPrice) {
+function createBooking($room_id, $user_id, $check_in, $check_out, $total_price) {
     global $conn;
     
-    // Start transaction
-    $conn->begin_transaction();
-    
     try {
-        // Create the booking
-        $sql = "INSERT INTO bookings (room_id, user_id, check_in, check_out, total_price, status) 
-                VALUES (?, ?, ?, ?, ?, 'confirmed')";
+        $conn->begin_transaction();
+        
+        $sql = "INSERT INTO bookings (room_id, user_id, check_in, check_out, total_price, status, payment_id, payment_method) 
+                VALUES (?, ?, ?, ?, ?, 'pending', NULL, NULL)";
         $stmt = $conn->prepare($sql);
-        $stmt->bind_param("iissd", $roomId, $userId, $checkIn, $checkOut, $totalPrice);
-        $stmt->execute();
+        $stmt->bind_param("iissd", $room_id, $user_id, $check_in, $check_out, $total_price);
         
-        $booking_id = $conn->insert_id;
-        
-        // Commit transaction
-        $conn->commit();
-        
-        return $booking_id;
+        if ($stmt->execute()) {
+            $booking_id = $conn->insert_id;
+            $conn->commit();
+            return $booking_id;
+        } else {
+            $conn->rollback();
+            return false;
+        }
     } catch (Exception $e) {
-        // Rollback transaction on error
         $conn->rollback();
         return false;
     }
 }
 
-function getBookingsByUser($userId) {
+function getBookingsByUser($user_id) {
     global $conn;
-    $sql = "SELECT b.*, r.name as room_name, r.type as room_type, h.name as hotel_name 
+    
+    $sql = "SELECT b.*, r.name as room_name, r.image as room_image, r.type as room_type, 
+            h.name as hotel_name, h.city as hotel_city 
             FROM bookings b 
             LEFT JOIN rooms r ON b.room_id = r.id 
             LEFT JOIN hotels h ON r.hotel_id = h.id 
-            WHERE b.user_id = ? 
-            ORDER BY b.created_at DESC";
+            WHERE b.user_id = ?";
+            
+    error_log("Getting bookings for user: " . $user_id);
+    error_log("SQL Query: " . $sql);
+    
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("i", $userId);
-    $stmt->execute();
-    return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    if (!$stmt) {
+        error_log("Prepare failed: " . $conn->error);
+        return [];
+    }
+    
+    $stmt->bind_param("i", $user_id);
+    if (!$stmt->execute()) {
+        error_log("Execute failed: " . $stmt->error);
+        return [];
+    }
+    
+    $result = $stmt->get_result();
+    $bookings = $result->fetch_all(MYSQLI_ASSOC);
+    
+    error_log("Found " . count($bookings) . " bookings");
+    if (count($bookings) === 0) {
+        error_log("No bookings found. Last SQL error: " . $conn->error);
+    }
+    
+    return $bookings;
 }
 
-function updateBookingStatus($bookingId, $status) {
+function updateBookingStatus($booking_id, $status) {
     global $conn;
     $sql = "UPDATE bookings SET status = ? WHERE id = ?";
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("si", $status, $bookingId);
+    $stmt->bind_param("si", $status, $booking_id);
     return $stmt->execute();
 }
 
-function deleteBooking($bookingId) {
+function deleteBooking($booking_id) {
     global $conn;
     $sql = "DELETE FROM bookings WHERE id = ?";
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("i", $bookingId);
+    $stmt->bind_param("i", $booking_id);
     return $stmt->execute();
 }
 
 // Review functions
-function createReview($bookingId, $userId, $roomId, $rating, $comment) {
+function createReview($booking_id, $user_id, $room_id, $rating, $comment) {
     global $conn;
     $sql = "INSERT INTO reviews (booking_id, user_id, room_id, rating, comment) VALUES (?, ?, ?, ?, ?)";
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("iiiis", $bookingId, $userId, $roomId, $rating, $comment);
+    $stmt->bind_param("iiiis", $booking_id, $user_id, $room_id, $rating, $comment);
     return $stmt->execute();
 }
 
-function getReviewsByRoom($roomId) {
+function getReviewsByRoom($room_id) {
     global $conn;
     $sql = "SELECT r.*, u.name as user_name 
             FROM reviews r 
@@ -347,7 +421,7 @@ function getReviewsByRoom($roomId) {
             WHERE r.room_id = ? AND r.status = 'approved'
             ORDER BY r.created_at DESC";
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("i", $roomId);
+    $stmt->bind_param("i", $room_id);
     $stmt->execute();
     return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 }
@@ -373,6 +447,21 @@ function validateUser($email, $password) {
     $user = getUserByEmail($email);
     if ($user && password_verify($password, $user['password'])) {
         return $user;
+    }
+    return false;
+}
+
+// User role functions
+function isAdmin($user_id) {
+    global $conn;
+    $sql = "SELECT role FROM users WHERE id = ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("i", $user_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    if ($result && $result->num_rows > 0) {
+        $user = $result->fetch_assoc();
+        return $user['role'] === 'admin';
     }
     return false;
 }
@@ -438,7 +527,7 @@ function getAdminDashboardStats() {
 }
 
 // Get booked dates for a room
-function getBookedDates($roomId) {
+function getBookedDates($room_id) {
     global $conn;
     $dates = [];
     
@@ -448,7 +537,7 @@ function getBookedDates($roomId) {
             AND status != 'cancelled' 
             AND check_out >= CURRENT_DATE()";
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("i", $roomId);
+    $stmt->bind_param("i", $room_id);
     $stmt->execute();
     $result = $stmt->get_result();
     
@@ -506,7 +595,7 @@ function updateUserRole($id, $role) {
     return $stmt->execute();
 }
 
-function deleteUser($userId) {
+function deleteUser($user_id) {
     global $conn;
     
     // Start transaction
@@ -515,17 +604,17 @@ function deleteUser($userId) {
     try {
         // Delete user's bookings
         $stmt = $conn->prepare("DELETE FROM bookings WHERE user_id = ?");
-        $stmt->bind_param("i", $userId);
+        $stmt->bind_param("i", $user_id);
         $stmt->execute();
         
         // Delete user's reviews
         $stmt = $conn->prepare("DELETE FROM reviews WHERE user_id = ?");
-        $stmt->bind_param("i", $userId);
+        $stmt->bind_param("i", $user_id);
         $stmt->execute();
         
         // Finally, delete the user
         $stmt = $conn->prepare("DELETE FROM users WHERE id = ?");
-        $stmt->bind_param("i", $userId);
+        $stmt->bind_param("i", $user_id);
         $stmt->execute();
         
         // If we got here, commit the changes

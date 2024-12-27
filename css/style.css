@@ -133,10 +133,24 @@ main {
     text-decoration: none;
     border-radius: 4px;
     transition: background-color 0.3s;
+    border: none;
+    cursor: pointer;
+    font-size: 1rem;
 }
 
 .btn:hover {
     background-color: #2980b9;
+}
+
+.btn.pay-now {
+    background-color: #2ecc71;
+    color: white;
+    font-weight: 500;
+    padding: 0.6rem 1.2rem;
+}
+
+.btn.pay-now:hover {
+    background-color: #27ae60;
 }
 
 /* Form styles */
@@ -608,19 +622,18 @@ body {
 }
 
 .booking-card {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    overflow: hidden;
     display: flex;
     gap: 20px;
-    padding: 20px;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    margin-bottom: 20px;
 }
 
 .booking-image {
-    width: 120px;
-    height: 80px;
+    flex: 0 0 300px;
+    height: 250px;
     overflow: hidden;
-    border-radius: 4px;
 }
 
 .booking-image img {
@@ -629,54 +642,74 @@ body {
     object-fit: cover;
 }
 
-.booking-image .no-image {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background-color: #f5f5f5;
-    color: #999;
-    font-size: 12px;
-    text-align: center;
-    padding: 10px;
-}
-
-.booking-info {
+.booking-details {
     flex: 1;
+    padding: 20px;
 }
 
-.booking-info h3 {
-    margin: 0 0 10px;
-    font-size: 18px;
+.booking-details h3 {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.5rem;
+    color: #2c3e50;
+    margin-bottom: 10px;
 }
 
-.booking-info p {
-    margin: 5px 0;
-    color: #666;
+.hotel-name {
+    color: #7f8c8d;
+    font-size: 1rem;
+    margin-bottom: 20px;
+}
+
+.dates {
+    margin-bottom: 20px;
+}
+
+.dates p {
+    margin-bottom: 10px;
+    color: #34495e;
+}
+
+.price {
+    font-size: 1.2rem;
+    color: #2c3e50;
+    margin-bottom: 20px;
 }
 
 .status {
-    display: inline-block;
-    padding: 4px 8px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.status-paid {
+    background-color: #2ecc71;
+    color: white;
+    padding: 5px 12px;
     border-radius: 4px;
-    font-size: 12px;
-    font-weight: 500;
+    font-size: 0.9rem;
 }
 
 .status-pending {
-    background-color: #fff3cd;
-    color: #856404;
+    background-color: #f1c40f;
+    color: #2c3e50;
+    padding: 5px 12px;
+    border-radius: 4px;
+    font-size: 0.9rem;
 }
 
-.status-confirmed {
-    background-color: #d4edda;
-    color: #155724;
+.payment-method {
+    color: #7f8c8d;
+    font-size: 0.9rem;
 }
 
-.status-cancelled {
-    background-color: #f8d7da;
-    color: #721c24;
+@media (max-width: 768px) {
+    .booking-card {
+        flex-direction: column;
+    }
+
+    .booking-image {
+        flex: 0 0 200px;
+    }
 }
 
 .no-bookings {
@@ -778,6 +811,7 @@ body {
 /* Bookings styles */
 .bookings-section {
     padding: 4rem 0;
+    margin-top: 80px;
 }
 
 .bookings-grid {
@@ -903,6 +937,7 @@ body {
     }
 }
 
+/* Page header styles */
 .page-header {
     padding: 8rem 0 4rem;
     background: linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url('../img/header-bg.jpg');

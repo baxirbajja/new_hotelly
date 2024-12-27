@@ -17,7 +17,7 @@ $dates = $_POST['dates'] ?? '';
 $price_per_night = $_POST['price_per_night'] ?? 0;
 
 if (!$room_id || !$dates || !$price_per_night) {
-    $_SESSION['error'] = "Missing required booking information";
+    $_SESSION['error'] = "Missing required booking information. Please select your dates and try again.";
     header('Location: room.php?id=' . $room_id);
     exit;
 }
@@ -25,7 +25,7 @@ if (!$room_id || !$dates || !$price_per_night) {
 // Split the date range into check-in and check-out dates
 $date_parts = explode(' - ', $dates);
 if (count($date_parts) !== 2) {
-    $_SESSION['error'] = "Invalid date range";
+    $_SESSION['error'] = "Please select both check-in and check-out dates.";
     header('Location: room.php?id=' . $room_id);
     exit;
 }
@@ -33,11 +33,50 @@ if (count($date_parts) !== 2) {
 $check_in = date('Y-m-d', strtotime($date_parts[0]));
 $check_out = date('Y-m-d', strtotime($date_parts[1]));
 
-// Calculate total nights and price
+// Validate dates
+if (!$check_in || !$check_out || $check_in === '1970-01-01' || $check_out === '1970-01-01') {
+    $_SESSION['error'] = "Invalid date format. Please select your dates again.";
+    header('Location: room.php?id=' . $room_id);
+    exit;
+}
+
+// Check if dates are in the past
+$today = new DateTime();
+$today->setTime(0, 0);
 $check_in_obj = new DateTime($check_in);
 $check_out_obj = new DateTime($check_out);
+
+if ($check_in_obj < $today) {
+    $_SESSION['error'] = "Check-in date cannot be in the past.";
+    header('Location: room.php?id=' . $room_id);
+    exit;
+}
+
+if ($check_in_obj >= $check_out_obj) {
+    $_SESSION['error'] = "Check-out date must be after check-in date.";
+    header('Location: room.php?id=' . $room_id);
+    exit;
+}
+
+// Calculate total nights and price
 $nights = $check_out_obj->diff($check_in_obj)->days;
+if ($nights < 1) {
+    $_SESSION['error'] = "Minimum stay is 1 night.";
+    header('Location: room.php?id=' . $room_id);
+    exit;
+}
 $total_price = $nights * $price_per_night;
+
+// Verify room exists and is available
+$sql = "SELECT id FROM rooms WHERE id = ?";
+$stmt = $conn->prepare($sql);
+$stmt->bind_param("i", $room_id);
+$stmt->execute();
+if (!$stmt->get_result()->fetch_assoc()) {
+    $_SESSION['error'] = "Invalid room selection.";
+    header('Location: rooms.php');
+    exit;
+}
 
 // Verify dates are available
 $booked_dates = getBookedDates($room_id);
@@ -47,7 +86,7 @@ $current_date = clone $check_in_obj;
 while ($current_date < $check_out_obj) {
     $date_str = $current_date->format('Y-m-d');
     if (in_array($date_str, $booked_dates)) {
-        $_SESSION['error'] = "Selected dates are no longer available";
+        $_SESSION['error'] = "Some of your selected dates are no longer available. Please choose different dates.";
         header('Location: room.php?id=' . $room_id);
         exit;
     }
@@ -55,7 +94,7 @@ while ($current_date < $check_out_obj) {
     $current_date->modify('+1 day');
 }
 
-// Create the booking
+// Create the booking with pending payment status
 $booking_id = createBooking($room_id, $_SESSION['user_id'], $check_in, $check_out, $total_price);
 
 if (!$booking_id) {
@@ -64,36 +103,7 @@ if (!$booking_id) {
     exit;
 }
 
-// Get user and room details for the email
-$user = getUserById($_SESSION['user_id']);
-$room = getRoomById($room_id);
-
-// Send booking confirmation email
-$to = $user['email'];
-$subject = "Booking Confirmation - " . $room['name'];
-$message = "
-Dear " . $user['name'] . ",
-
-Thank you for booking with Hotelly! Here are your booking details:
-
-Room: " . $room['name'] . " at " . $room['hotel_name'] . "
-Check-in: " . date('F j, Y', strtotime($check_in)) . "
-Check-out: " . date('F j, Y', strtotime($check_out)) . "
-Total Nights: " . $nights . "
-Total Price: $" . number_format($total_price, 2) . "
-
-Your booking is confirmed. You can view your booking details in your account dashboard.
-
-Best regards,
-The Hotelly Team
-";
-
-$headers = "From: bookings@hotelly.com";
-
-mail($to, $subject, $message, $headers);
-
-// Redirect to success page
-$_SESSION['success'] = "Booking confirmed! Check your email for details.";
-header('Location: bookings.php');
+// Redirect to payment page
+header('Location: payment.php?booking_id=' . $booking_id);
 exit;
 ?>

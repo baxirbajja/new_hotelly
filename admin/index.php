@@ -23,7 +23,6 @@ $stats = [
     'monthly_revenue' => [5000, 7500, 4000, 6000, 10000, 9000],
     'recent_activity' => [
         ['type' => 'Booking', 'description' => 'New booking for Luxury Suite', 'time' => '2 hours ago'],
-        ['type' => 'Review', 'description' => 'New 5-star review received', 'time' => '3 hours ago'],
         ['type' => 'User', 'description' => 'New user registration', 'time' => '5 hours ago']
     ]
 ];
@@ -52,7 +51,6 @@ $stats = [
             <a href="rooms.php" class="nav-link">Rooms</a>
             <a href="bookings.php" class="nav-link">Bookings</a>
             <a href="users.php" class="nav-link">Users</a>
-            <a href="reviews.php" class="nav-link">Reviews</a>
             <a href="../logout.php" class="nav-link">Logout</a>
         </div>
     </nav>

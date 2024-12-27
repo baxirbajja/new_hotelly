@@ -7,17 +7,90 @@ $check_in = $_GET['check_in'] ?? '';
 $check_out = $_GET['check_out'] ?? '';
 $guests = $_GET['guests'] ?? '';
 $room_type = $_GET['room_type'] ?? '';
+$city = $_GET['city'] ?? '';
+$hotel_name = $_GET['hotel_name'] ?? '';
 
-// Get all available rooms with filters
-$sql = "SELECT * FROM rooms WHERE is_available = 1";
+// Get list of cities and hotels for filters
+$cities_query = "SELECT DISTINCT city FROM hotels ORDER BY city";
+$cities_result = $conn->query($cities_query);
+$cities = $cities_result->fetch_all(MYSQLI_ASSOC);
+
+$hotels_query = "SELECT DISTINCT name FROM hotels ORDER BY name";
+$hotels_result = $conn->query($hotels_query);
+$hotels = $hotels_result->fetch_all(MYSQLI_ASSOC);
+
+// Base query to get all rooms with hotel information
+$sql = "SELECT DISTINCT r.*, h.name as hotel_name, h.city as hotel_city 
+        FROM rooms r
+        JOIN hotels h ON r.hotel_id = h.id";
+
+// Add joins and conditions if dates are provided
+if ($check_in && $check_out) {
+    $sql .= " LEFT JOIN bookings b ON r.id = b.room_id 
+              AND b.status != 'cancelled'
+              AND (
+                  (b.check_in <= ? AND b.check_out > ?) 
+                  OR (b.check_in < ? AND b.check_out >= ?)
+                  OR (b.check_in >= ? AND b.check_out <= ?)
+              )";
+}
+
+$sql .= " WHERE 1=1";  // Always true condition to make adding conditions easier
+
+// Add other filters
 if ($room_type) {
-    $sql .= " AND type = '" . $conn->real_escape_string($room_type) . "'";
+    $sql .= " AND r.type = ?";
 }
 if ($guests) {
-    $sql .= " AND capacity >= " . (int)$guests;
+    $sql .= " AND r.capacity >= ?";
 }
-$result = $conn->query($sql);
-$rooms = $result->fetch_all(MYSQLI_ASSOC);
+if ($city) {
+    $sql .= " AND h.city = ?";
+}
+if ($hotel_name) {
+    $sql .= " AND h.name = ?";
+}
+
+// If dates are provided, only show available rooms
+if ($check_in && $check_out) {
+    $sql .= " AND b.id IS NULL";
+}
+
+// Prepare and execute the query
+$stmt = $conn->prepare($sql);
+
+// Create arrays for parameter types and values
+$types = '';
+$params = [];
+
+if ($check_in && $check_out) {
+    $types .= 'ssssss';
+    array_push($params, $check_out, $check_in, $check_out, $check_in, $check_in, $check_out);
+}
+if ($room_type) {
+    $types .= 's';
+    $params[] = $room_type;
+}
+if ($guests) {
+    $types .= 'i';
+    $params[] = $guests;
+}
+if ($city) {
+    $types .= 's';
+    $params[] = $city;
+}
+if ($hotel_name) {
+    $types .= 's';
+    $params[] = $hotel_name;
+}
+
+// Bind parameters if they exist
+if (!empty($params)) {
+    $stmt->bind_param($types, ...$params);
+}
+
+$stmt->execute();
+$rooms = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 
 // Get user name if logged in
 $user_name = '';
@@ -26,8 +99,11 @@ if (isset($_SESSION['user_id'])) {
     $stmt = $conn->prepare($sql);
     $stmt->bind_param("i", $_SESSION['user_id']);
     $stmt->execute();
-    $user = $stmt->get_result()->fetch_assoc();
-    $user_name = $user['name'];
+    $result = $stmt->get_result();
+    if ($result && $result->num_rows > 0) {
+        $user = $result->fetch_assoc();
+        $user_name = $user['name'];
+    }
 }
 ?>
 
@@ -49,10 +125,14 @@ if (isset($_SESSION['user_id'])) {
         <div class="nav-right">
             <div class="nav-links">
                 <a href="index.php" class="nav-link">Home</a>
+                <a href="hotels.php" class="nav-link">Hotels</a>
                 <a href="rooms.php" class="nav-link active">Rooms</a>
                 <?php if (isset($_SESSION['user_id'])): ?>
                     <a href="bookings.php" class="nav-link">My Bookings</a>
                     <a href="profile.php" class="nav-link"><?php echo htmlspecialchars($user_name); ?></a>
+                    <?php if (isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'admin'): ?>
+                        <a href="admin/index.php" class="nav-link admin-link">Dashboard</a>
+                    <?php endif; ?>
                     <a href="logout.php" class="nav-link">Logout</a>
                 <?php else: ?>
                     <a href="login.php" class="nav-link">Login</a>
@@ -101,6 +181,30 @@ if (isset($_SESSION['user_id'])) {
                         <option value="Suite" <?php echo $room_type == 'Suite' ? 'selected' : ''; ?>>Suite</option>
                     </select>
                 </div>
+                <div class="filter-group">
+                    <label>City</label>
+                    <select name="city" class="filter-input">
+                        <option value="">All Cities</option>
+                        <?php foreach ($cities as $city_option): ?>
+                            <option value="<?php echo htmlspecialchars($city_option['city']); ?>" 
+                                <?php echo $city == $city_option['city'] ? 'selected' : ''; ?>>
+                                <?php echo htmlspecialchars($city_option['city']); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>Hotel</label>
+                    <select name="hotel_name" class="filter-input">
+                        <option value="">All Hotels</option>
+                        <?php foreach ($hotels as $hotel_option): ?>
+                            <option value="<?php echo htmlspecialchars($hotel_option['name']); ?>"
+                                <?php echo $hotel_name == $hotel_option['name'] ? 'selected' : ''; ?>>
+                                <?php echo htmlspecialchars($hotel_option['name']); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
                 <button type="submit" class="btn btn-solid">Search Rooms</button>
             </form>
         </div>
@@ -121,6 +225,11 @@ if (isset($_SESSION['user_id'])) {
                         <div class="room-info">
                             <div class="room-type"><?php echo htmlspecialchars($room['type']); ?></div>
                             <h3 class="serif"><?php echo htmlspecialchars($room['name']); ?></h3>
+                            <p class="hotel-info">
+                                <span class="hotel-name"><?php echo htmlspecialchars($room['hotel_name']); ?></span>
+                                <span class="separator">•</span>
+                                <span class="hotel-city"><?php echo htmlspecialchars($room['hotel_city']); ?></span>
+                            </p>
                             <div class="room-features">
                                 <span><?php echo $room['capacity']; ?> Persons</span>
                                 <span>•</span>

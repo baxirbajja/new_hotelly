@@ -2,8 +2,12 @@
 require_once 'includes/functions.php';
 session_start();
 
-// Get featured rooms
-$sql = "SELECT * FROM rooms WHERE is_available = 1 LIMIT 3";
+// Get featured rooms with their hotel information
+$sql = "SELECT r.*, h.name as hotel_name, h.city 
+        FROM rooms r 
+        JOIN hotels h ON r.hotel_id = h.id 
+        ORDER BY RAND() 
+        LIMIT 3";
 $result = $conn->query($sql);
 $featured_rooms = $result->fetch_all(MYSQLI_ASSOC);
 
@@ -14,8 +18,11 @@ if (isset($_SESSION['user_id'])) {
     $stmt = $conn->prepare($sql);
     $stmt->bind_param("i", $_SESSION['user_id']);
     $stmt->execute();
-    $user = $stmt->get_result()->fetch_assoc();
-    $user_name = $user['name'];
+    $result = $stmt->get_result();
+    if ($result && $result->num_rows > 0) {
+        $user = $result->fetch_assoc();
+        $user_name = $user['name'];
+    }
 }
 ?>
 
@@ -61,8 +68,8 @@ if (isset($_SESSION['user_id'])) {
             <h1 class="serif">A NEW HOTEL IN<br>MOROCCO</h1>
             <p class="subtitle">Experience the perfect blend of modern comfort and timeless elegance in the heart of the city.</p>
             <div class="buttons">
-                <a href="rooms.php" class="btn btn-outline">View Rooms</a>
-                <a href="#about" class="btn btn-solid">Learn More</a>
+                <a href="hotels.php" class="btn btn-outline">View Hotels</a>
+                <a href="about_project.php" class="btn btn-solid">Learn More</a>
             </div>
         </div>
     </div>
@@ -91,6 +98,8 @@ if (isset($_SESSION['user_id'])) {
                                 <span><?php echo htmlspecialchars($room['view_type']); ?></span>
                             </div>
                             <p class="room-price">From $<?php echo number_format($room['price'], 2); ?> per night</p>
+                            <p class="room-hotel">Hotel: <?php echo htmlspecialchars($room['hotel_name']); ?></p>
+                            <p class="room-city">City: <?php echo htmlspecialchars($room['city']); ?></p>
                         </div>
                     </div>
                 <?php endforeach; ?>

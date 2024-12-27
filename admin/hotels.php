@@ -18,7 +18,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'city' => $_POST['city'],
                     'address' => $_POST['address'],
                     'description' => $_POST['description'],
-                    'rating' => floatval($_POST['rating']),
                     'amenities' => json_encode(explode(',', $_POST['amenities']))
                 ];
                 if ($_POST['image_type'] === 'url') {
@@ -45,21 +44,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'city' => $_POST['city'],
                     'address' => $_POST['address'],
                     'description' => $_POST['description'],
-                    'rating' => floatval($_POST['rating']),
                     'amenities' => json_encode(explode(',', $_POST['amenities']))
                 ];
 
                 // Handle image update
-                if ($_POST['image_type'] === 'url') {
-                    $data['image'] = $_POST['image_url'];
-                } else if (isset($_FILES['image_upload']) && $_FILES['image_upload']['error'] === UPLOAD_ERR_OK) {
-                    try {
-                        $data['image'] = uploadImage($_FILES['image_upload']);
-                    } catch (Exception $e) {
-                        $_SESSION['error'] = "Error uploading image: " . $e->getMessage();
-                        header('Location: hotels.php');
-                        exit;
-                    }
+                if (!empty($_POST['image'])) {
+                    $data['image'] = $_POST['image'];
                 }
 
                 if (updateHotel($_POST['hotel_id'], $data)) {
@@ -166,6 +156,21 @@ unset($_SESSION['success'], $_SESSION['error']);
             margin-left: 5px;
             display: inline-block;
         }
+        .hotel-thumbnail {
+            width: 100px;
+            height: 70px;
+            object-fit: cover;
+            border-radius: 4px;
+            transition: transform 0.2s;
+        }
+        .hotel-thumbnail:hover {
+            transform: scale(1.1);
+            cursor: pointer;
+        }
+        .admin-table td {
+            vertical-align: middle;
+            padding: 10px;
+        }
     </style>
 </head>
 <body>
@@ -180,8 +185,7 @@ unset($_SESSION['success'], $_SESSION['error']);
             <a href="rooms.php" class="nav-link">Rooms</a>
             <a href="bookings.php" class="nav-link">Bookings</a>
             <a href="users.php" class="nav-link">Users</a>
-            <a href="reviews.php" class="nav-link">Reviews</a>
-            <a href="../includes/logout.php" class="nav-link">Logout</a>
+            <a href="../logout.php" class="nav-link">Logout</a>
         </div>
     </nav>
 
@@ -204,10 +208,9 @@ unset($_SESSION['success'], $_SESSION['error']);
                 <table class="admin-table">
                     <thead>
                         <tr>
-                            <th>ID</th>
+                            <th>Image</th>
                             <th>Name</th>
                             <th>City</th>
-                            <th>Rating</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -216,12 +219,15 @@ unset($_SESSION['success'], $_SESSION['error']);
                         $hotels = getAllHotels();
                         foreach ($hotels as $hotel): ?>
                             <tr>
-                                <td><?php echo $hotel['id']; ?></td>
+                                <td>
+                                    <img src="<?php echo htmlspecialchars($hotel['image']); ?>" 
+                                         alt="<?php echo htmlspecialchars($hotel['name']); ?>" 
+                                         class="hotel-thumbnail">
+                                </td>
                                 <td><?php echo htmlspecialchars($hotel['name']); ?></td>
                                 <td><?php echo htmlspecialchars($hotel['city']); ?></td>
-                                <td><?php echo $hotel['rating']; ?> ★</td>
                                 <td>
-                                    <button class="admin-btn" onclick='showEditHotelModal(<?php echo json_encode($hotel); ?>)'>Edit</button>
+                                    <button class="admin-btn admin-btn-primary" onclick='editHotel(<?php echo json_encode($hotel); ?>)'>Edit</button>
                                     <form method="POST" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this hotel?');">
                                         <input type="hidden" name="action" value="delete">
                                         <input type="hidden" name="hotel_id" value="<?php echo $hotel['id']; ?>">
@@ -244,54 +250,53 @@ unset($_SESSION['success'], $_SESSION['error']);
                 <input type="hidden" name="action" value="add">
                 
                 <div class="form-group">
-                    <label>Hotel Name</label>
-                    <input type="text" name="name" required>
+                    <label for="name">Hotel Name</label>
+                    <input type="text" id="name" name="name" required>
                 </div>
 
                 <div class="form-group">
-                    <label>City</label>
-                    <input type="text" name="city" required>
+                    <label for="city">City</label>
+                    <input type="text" id="city" name="city" required>
                 </div>
 
                 <div class="form-group">
-                    <label>Address</label>
-                    <input type="text" name="address" required>
+                    <label for="address">Address</label>
+                    <input type="text" id="address" name="address" required>
                 </div>
 
                 <div class="form-group">
-                    <label>Description</label>
-                    <textarea name="description" required></textarea>
+                    <label for="description">Description</label>
+                    <textarea id="description" name="description" required></textarea>
                 </div>
 
                 <div class="form-group">
-                    <label>Image</label>
-                    <div class="image-input-group">
-                        <div class="input-option">
-                            <input type="radio" name="image_type" value="url" id="url_option" checked>
-                            <label for="url_option">Image URL</label>
-                            <input type="url" name="image_url" class="image-input" placeholder="Enter image URL">
-                        </div>
-                        <div class="input-option">
-                            <input type="radio" name="image_type" value="upload" id="upload_option">
-                            <label for="upload_option">Upload Image</label>
-                            <input type="file" name="image_upload" class="image-input" accept="image/*">
-                        </div>
+                    <label for="amenities">Amenities (comma-separated)</label>
+                    <input type="text" id="amenities" name="amenities" placeholder="Pool, Spa, Restaurant, etc." required>
+                </div>
+
+                <div class="form-group">
+                    <label>Image Source</label>
+                    <div class="radio-group">
+                        <input type="radio" id="url" name="image_type" value="url" checked>
+                        <label for="url">URL</label>
+                        <input type="radio" id="upload" name="image_type" value="upload">
+                        <label for="upload">Upload</label>
                     </div>
                 </div>
 
-                <div class="form-group">
-                    <label>Rating</label>
-                    <input type="number" name="rating" min="0" max="5" step="0.1" required>
+                <div class="form-group" id="url-input">
+                    <label for="image_url">Image URL</label>
+                    <input type="url" id="image_url" name="image_url">
                 </div>
 
-                <div class="form-group">
-                    <label>Amenities (comma-separated)</label>
-                    <input type="text" name="amenities" required>
+                <div class="form-group" id="upload-input" style="display: none;">
+                    <label for="image_upload">Upload Image</label>
+                    <input type="file" id="image_upload" name="image_upload" accept="image/*">
                 </div>
 
-                <div class="form-buttons">
-                    <button type="button" class="admin-btn" onclick="closeModal('addHotelModal')">Cancel</button>
-                    <button type="submit" class="admin-btn admin-btn-primary">Add Hotel</button>
+                <div class="form-actions">
+                    <button type="submit" class="btn-primary">Add Hotel</button>
+                    <button type="button" class="btn-secondary" onclick="closeModal('addHotelModal')">Cancel</button>
                 </div>
             </form>
         </div>
@@ -301,59 +306,43 @@ unset($_SESSION['success'], $_SESSION['error']);
     <div id="editHotelModal" class="modal">
         <div class="modal-content">
             <h2>Edit Hotel</h2>
-            <form method="POST" class="admin-form" enctype="multipart/form-data">
+            <form method="POST" class="admin-form">
                 <input type="hidden" name="action" value="edit">
                 <input type="hidden" name="hotel_id" id="edit_hotel_id">
-                
+
                 <div class="form-group">
-                    <label>Hotel Name</label>
-                    <input type="text" name="name" id="edit_name" required>
+                    <label for="edit_name">Hotel Name</label>
+                    <input type="text" id="edit_name" name="name" required>
                 </div>
 
                 <div class="form-group">
-                    <label>City</label>
-                    <input type="text" name="city" id="edit_city" required>
+                    <label for="edit_city">City</label>
+                    <input type="text" id="edit_city" name="city" required>
                 </div>
 
                 <div class="form-group">
-                    <label>Address</label>
-                    <input type="text" name="address" id="edit_address" required>
+                    <label for="edit_address">Address</label>
+                    <input type="text" id="edit_address" name="address" required>
                 </div>
 
                 <div class="form-group">
-                    <label>Description</label>
-                    <textarea name="description" id="edit_description" required></textarea>
+                    <label for="edit_description">Description</label>
+                    <textarea id="edit_description" name="description" required></textarea>
                 </div>
 
                 <div class="form-group">
-                    <label>Image</label>
-                    <div class="image-input-group">
-                        <div class="input-option">
-                            <input type="radio" name="image_type" value="url" id="edit_url_option" checked>
-                            <label for="edit_url_option">Image URL</label>
-                            <input type="url" name="image_url" id="edit_image" class="image-input" placeholder="Enter image URL">
-                        </div>
-                        <div class="input-option">
-                            <input type="radio" name="image_type" value="upload" id="edit_upload_option">
-                            <label for="edit_upload_option">Upload New Image</label>
-                            <input type="file" name="image_upload" class="image-input" accept="image/*">
-                        </div>
-                    </div>
+                    <label for="edit_amenities">Amenities (comma-separated)</label>
+                    <input type="text" id="edit_amenities" name="amenities" required>
                 </div>
 
                 <div class="form-group">
-                    <label>Rating</label>
-                    <input type="number" name="rating" id="edit_rating" min="0" max="5" step="0.1" required>
+                    <label for="edit_image">Image URL</label>
+                    <input type="text" id="edit_image" name="image">
                 </div>
 
-                <div class="form-group">
-                    <label>Amenities (comma-separated)</label>
-                    <input type="text" name="amenities" id="edit_amenities" required>
-                </div>
-
-                <div class="form-buttons">
-                    <button type="button" class="admin-btn" onclick="closeModal('editHotelModal')">Cancel</button>
-                    <button type="submit" class="admin-btn admin-btn-primary">Update Hotel</button>
+                <div class="form-actions">
+                    <button type="submit" class="btn-primary">Update Hotel</button>
+                    <button type="button" class="btn-secondary" onclick="closeModal('editHotelModal')">Cancel</button>
                 </div>
             </form>
         </div>
@@ -371,75 +360,44 @@ unset($_SESSION['success'], $_SESSION['error']);
             addModal.style.display = 'block';
         }
 
-        function closeModal(modalId) {
-            document.getElementById(modalId).style.display = 'none';
-        }
-
-        function showEditHotelModal(hotel) {
+        function editHotel(hotel) {
+            // Parse amenities if it's a string
+            let amenities = hotel.amenities;
+            if (typeof amenities === 'string') {
+                try {
+                    amenities = JSON.parse(amenities);
+                } catch (e) {
+                    console.error('Error parsing amenities:', e);
+                    amenities = [];
+                }
+            }
+            
+            // Populate form fields
             document.getElementById('edit_hotel_id').value = hotel.id;
             document.getElementById('edit_name').value = hotel.name;
             document.getElementById('edit_city').value = hotel.city;
             document.getElementById('edit_address').value = hotel.address;
             document.getElementById('edit_description').value = hotel.description;
             document.getElementById('edit_image').value = hotel.image || '';
-            document.getElementById('edit_rating').value = hotel.rating;
+            document.getElementById('edit_amenities').value = Array.isArray(amenities) ? amenities.join(', ') : '';
             
-            try {
-                const amenities = typeof hotel.amenities === 'string' ? 
-                    JSON.parse(hotel.amenities) : 
-                    hotel.amenities || [];
-                document.getElementById('edit_amenities').value = Array.isArray(amenities) ? 
-                    amenities.join(',') : 
-                    '';
-            } catch (e) {
-                document.getElementById('edit_amenities').value = '';
-                console.error('Error parsing amenities:', e);
-            }
-            
+            // Show modal
             editModal.style.display = 'block';
         }
 
-        // Close modals when clicking outside
+        function closeModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
+        }
+
+        // Close modal when clicking outside
         window.onclick = function(event) {
             if (event.target === addModal) {
-                closeModal('addHotelModal');
+                addModal.style.display = 'none';
             }
             if (event.target === editModal) {
-                closeModal('editHotelModal');
+                editModal.style.display = 'none';
             }
         }
-
-        // Handle image input type switching
-        function setupImageInputs(formPrefix = '') {
-            const prefix = formPrefix ? formPrefix + '_' : '';
-            const radioInputs = document.querySelectorAll(`input[name="${prefix}image_type"]`);
-            const urlInput = document.querySelector(`input[name="${prefix}image_url"]`);
-            const fileInput = document.querySelector(`input[name="${prefix}image_upload"]`);
-            
-            if (radioInputs && urlInput && fileInput) {
-                radioInputs.forEach(radio => {
-                    radio.addEventListener('change', function() {
-                        if (this.value === 'url') {
-                            urlInput.style.display = 'block';
-                            fileInput.style.display = 'none';
-                            urlInput.required = true;
-                            fileInput.required = false;
-                        } else {
-                            urlInput.style.display = 'none';
-                            fileInput.style.display = 'block';
-                            urlInput.required = false;
-                            fileInput.required = true;
-                        }
-                    });
-                });
-            }
-        }
-
-        // Setup image inputs for both forms
-        document.addEventListener('DOMContentLoaded', function() {
-            setupImageInputs();
-            setupImageInputs('edit');
-        });
     </script>
 </body>
 </html>
